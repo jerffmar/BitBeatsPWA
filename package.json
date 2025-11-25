@@ -7,12 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "start": "npx serve -s dist -l $PORT",
     "render-deploy": "chmod +x ./scripts/render-deploy.sh && ./scripts/render-deploy.sh"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "serve": "^14.2.3"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
