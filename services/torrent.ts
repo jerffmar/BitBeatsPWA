@@ -7,8 +7,8 @@ declare global {
   }
 }
 
-// Public WebSocket Trackers (Signaling Servers)
-const TRACKERS = [
+// Default fallback if trackers.txt fails to load
+const DEFAULT_TRACKERS = [
   'wss://tracker.openwebtorrent.com',
   'wss://tracker.btorrent.xyz',
   'wss://tracker.files.fm:7073/announce',
@@ -16,36 +16,65 @@ const TRACKERS = [
 ];
 
 let client: any = null;
+let initPromise: Promise<any> | null = null;
 
-export const initTorrentClient = () => {
-  if (client) return client;
-  if (!window.WebTorrent) {
-    console.error("WebTorrent script not loaded");
-    return null;
-  }
-  
-  client = new window.WebTorrent({
-    tracker: {
-        announce: TRACKERS
+const fetchTrackers = async (): Promise<string[]> => {
+    try {
+        const response = await fetch('/trackers.txt');
+        if (!response.ok) {
+            console.warn("trackers.txt not found, using defaults.");
+            return DEFAULT_TRACKERS;
+        }
+        const text = await response.text();
+        const list = text.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0 && !line.startsWith('#')); // Filter empty lines and comments
+        
+        return list.length > 0 ? list : DEFAULT_TRACKERS;
+    } catch (err) {
+        console.warn("Failed to fetch trackers.txt:", err);
+        return DEFAULT_TRACKERS;
     }
-  });
-
-  client.on('error', (err: any) => {
-    console.error('[WebTorrent] Error:', err);
-  });
-
-  console.log("🌊 WebTorrent Client Initialized with Public Trackers");
-  return client;
 };
 
-export const getClient = () => client || initTorrentClient();
+export const initTorrentClient = async () => {
+  if (client) return client;
+  if (initPromise) return initPromise;
+  
+  initPromise = (async () => {
+      if (!window.WebTorrent) {
+        console.error("WebTorrent script not loaded");
+        return null;
+      }
+      
+      const trackers = await fetchTrackers();
+      console.log(`🌊 Initializing WebTorrent with ${trackers.length} trackers loaded from config.`);
+      
+      client = new window.WebTorrent({
+        tracker: {
+            announce: trackers
+        }
+      });
+
+      client.on('error', (err: any) => {
+        console.error('[WebTorrent] Error:', err);
+      });
+
+      return client;
+  })();
+
+  return initPromise;
+};
+
+// Synchronous accessor for stats loops (returns null if not yet initialized)
+export const getClient = () => client;
 
 /**
  * Seeds a file to the P2P network
  */
 export const seedFile = (file: File | Blob, name: string): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const c = getClient();
+  return new Promise(async (resolve, reject) => {
+    const c = client || await initTorrentClient();
     if (!c) return reject("Client not ready");
 
     // Check if already seeding
@@ -56,7 +85,8 @@ export const seedFile = (file: File | Blob, name: string): Promise<string> => {
         return;
     }
 
-    c.seed(file, { name: name, announce: TRACKERS }, (torrent: any) => {
+    // Use client default trackers (configured in init)
+    c.seed(file, { name: name }, (torrent: any) => {
       console.log('✅ Seeding started:', torrent.infoHash);
       resolve(torrent.magnetURI);
     });
@@ -67,15 +97,15 @@ export const seedFile = (file: File | Blob, name: string): Promise<string> => {
  * Adds a magnet link to start downloading/streaming
  */
 export const addTorrent = (magnetURI: string, onProgress: (prog: number, speed: number) => void): Promise<{ file: any, url: string }> => {
-    return new Promise((resolve, reject) => {
-        const c = getClient();
+    return new Promise(async (resolve, reject) => {
+        const c = client || await initTorrentClient();
         if (!c) return reject("Client not ready");
         
         // Check duplication
         const existing = c.get(magnetURI);
         if (existing) {
             // If exists, find file and return
-            const file = existing.files.find((f: any) => f.name.endsWith('.mp3') || f.name.endsWith('.wav'));
+            const file = existing.files.find((f: any) => f.name.endsWith('.mp3') || f.name.endsWith('.wav') || f.name.endsWith('.webm'));
             if(file) {
                  file.getBlobURL((err: any, url: string) => {
                      if(err) reject(err);
@@ -85,7 +115,8 @@ export const addTorrent = (magnetURI: string, onProgress: (prog: number, speed: 
             }
         }
 
-        c.add(magnetURI, { announce: TRACKERS }, (torrent: any) => {
+        // Add torrent
+        c.add(magnetURI, (torrent: any) => {
             console.log('⬇️ Torrent added:', torrent.infoHash);
             
             // Assume single audio file for simplicity in this PoC
