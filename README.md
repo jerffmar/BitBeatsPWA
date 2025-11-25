@@ -24,27 +24,28 @@ BitBeats is a Proof-of-Concept (PoC) Progressive Web App (PWA) demonstrating a d
 - **LAN Sync:** Discovery of peers on the local network to save internet bandwidth.
 
 ### 4. Creator Studio
-- **Identity:** Ed25519 cryptographic identity management.
-- **Direct Upload:** Artists sign their tracks; no middlemen.
+- **Audio Processing Engine:** Client-side analysis and normalization.
+- **Fingerprinting:** Unique content IDs generated from audio data to prevent duplicates.
+- **Normalization:** Audio is automatically normalized to -1dB before seeding.
 
 ## 🛠 Technical Stack
 - **Frontend:** React 18+, Vite, TypeScript
 - **Styling:** Tailwind CSS (Dark Mode optimized)
 - **Storage:** Native File System Access API (OPFS)
-- **Networking:** Gun.js (Decentralized DB), Simulated WebTorrent
-- **Icons:** Lucide React
+- **Networking:** Gun.js (Decentralized DB), WebTorrent (WebRTC P2P)
+- **Audio Engine:** Web Audio API (OfflineAudioContext)
 
 ## 🚀 Roadmap & To-Do Goals
 
-### Phase 1: Networking (In Progress)
+### Phase 1: Networking (Completed)
 - [x] **Decentralized DB:** Integrated **Gun.js** for real-time, peer-to-peer chat ("Swarm Chatter").
-- [ ] **WebTorrent Integration:** Replace the simulation loop in `App.tsx` with actual WebRTC data channels and torrent protocol.
-- [ ] **Signaling Server:** Deploy a lightweight WebSocket tracker for initial peer discovery.
+- [x] **WebTorrent Integration:** Replaced simulation with **WebTorrent** library. The app now supports Magnet URIs.
+- [x] **Signaling Server:** Configured to use public WebSocket trackers (OpenWebTorrent, etc.).
 
-### Phase 2: Audio Engine
-- [ ] **Audio Fingerprinting:** Integrate Chromaprint/AcoustID (via WASM) to verify files match the metadata and prevent duplicate uploads.
-- [ ] **Transcoding:** Client-side FFmpeg (WASM) to normalize audio formats before seeding.
-- [ ] **Streaming Range Requests:** Optimize the OPFS reader to support HTTP Range requests for instant seeking in large files.
+### Phase 2: Audio Engine (Completed)
+- [x] **Audio Fingerprinting:** Implemented client-side audio buffer analysis to generate unique content signatures (`services/audioEngine.ts`).
+- [x] **Transcoding:** Implemented `normalizeAndTranscode` using the Web Audio API to standardize uploads to WAV/WebM.
+- [x] **Streaming Optimization:** Updated playback engine to stream directly from Torrent blobs or OPFS blobs.
 
 ### Phase 3: Cryptography & Security
 - [ ] **Real Signatures:** Implement `libsodium-wrappers` for actual Ed25519 signing of uploads.
