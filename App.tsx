@@ -175,16 +175,29 @@ function App() {
 
     // Setup Audio Listeners
     const audio = audioRef.current;
+    
+    // Allow crossorigin to play from standard CDNs
+    audio.crossOrigin = "anonymous";
+
     const updateTime = () => setCurrentTime(audio.currentTime);
     const updateDuration = () => setDuration(audio.duration || 0);
     const onEnded = () => setIsPlaying(false);
+    const onError = (e: Event) => {
+        console.error("Audio playback error:", audio.error);
+        setIsPlaying(false);
+    };
+
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('loadedmetadata', updateDuration);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
+
     return () => {
       audio.removeEventListener('timeupdate', updateTime);
       audio.removeEventListener('loadedmetadata', updateDuration);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
+      audio.pause();
     };
   }, [user]);
 
@@ -245,38 +258,75 @@ function App() {
     setCurrentTrack(null);
     setIsPlaying(false);
     audioRef.current.pause();
+    audioRef.current.src = "";
   };
 
   const handlePlay = async (track: Track) => {
-    // Update "Last Played" for Eviction Logic
-    setLibrary(prev => {
-        const entry = prev[track.id];
-        if (entry) return { ...prev, [track.id]: { ...entry, lastPlayed: Date.now() }};
-        return prev;
-    });
+    try {
+        // Update "Last Played" for Eviction Logic
+        setLibrary(prev => {
+            const entry = prev[track.id];
+            if (entry) return { ...prev, [track.id]: { ...entry, lastPlayed: Date.now() }};
+            return prev;
+        });
 
-    if (currentTrack?.id === track.id) {
-        if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); }
-        else { audioRef.current.play(); setIsPlaying(true); }
-        return;
-    }
+        const audio = audioRef.current;
 
-    // Load from Vault OR Remote
-    const localUrl = await loadFromVault(track.id);
-    if (audioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(audioRef.current.src);
-    
-    audioRef.current.src = localUrl || track.audioUrl;
-    audioRef.current.play().catch(console.error);
-    
-    setCurrentTrack(track);
-    setIsPlaying(true);
+        // SAME TRACK TOGGLE
+        if (currentTrack?.id === track.id) {
+            if (isPlaying) { 
+                audio.pause(); 
+                setIsPlaying(false); 
+            } else { 
+                try {
+                    await audio.play();
+                    setIsPlaying(true);
+                } catch (e) {
+                    console.error("Resume failed:", e);
+                }
+            }
+            return;
+        }
 
-    // If remote, start downloading
-    if (!localUrl && !library[track.id]) {
-        setLibrary(prev => ({
-            ...prev,
-            [track.id]: { trackId: track.id, status: 'DOWNLOADING', progress: 0, addedAt: Date.now(), lastPlayed: Date.now() }
-        }));
+        // NEW TRACK
+        setIsPlaying(false);
+        audio.pause();
+        setCurrentTrack(track);
+
+        // Load from Vault OR Remote
+        const localUrl = await loadFromVault(track.id);
+        
+        // Clean up old object URLs to avoid memory leaks
+        if (audio.src.startsWith('blob:')) {
+            URL.revokeObjectURL(audio.src);
+        }
+        
+        audio.src = localUrl || track.audioUrl;
+        audio.load();
+
+        const playPromise = audio.play();
+        
+        if (playPromise !== undefined) {
+            playPromise
+                .then(() => {
+                    setIsPlaying(true);
+                })
+                .catch(error => {
+                    console.error("Playback failed:", error);
+                    setIsPlaying(false);
+                });
+        }
+
+        // If remote, start downloading
+        if (!localUrl && !library[track.id]) {
+            setLibrary(prev => ({
+                ...prev,
+                [track.id]: { trackId: track.id, status: 'DOWNLOADING', progress: 0, addedAt: Date.now(), lastPlayed: Date.now() }
+            }));
+        }
+
+    } catch (err) {
+        console.error("HandlePlay Error:", err);
     }
   };
 

@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: bitbeats
+    env: static
+    buildCommand: npm run render-deploy
+    staticPublishPath: ./dist
+    routes:
+      # CRITICAL: This allows React Router (SPA) to work on refresh
+      - type: rewrite
+        source: /*
+        destination: /index.html
