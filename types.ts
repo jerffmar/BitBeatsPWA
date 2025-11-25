@@ -73,9 +73,10 @@ export interface GlobalCatalogEntry {
   mbid: string;
   title: string;
   artist: string;
-  album: string;
-  year: string;
+  album?: string;
+  year?: string;
   coverUrl?: string;
+  type: 'song' | 'album' | 'artist';
 }
 
 export type ViewState = 'DISCOVERY' | 'LIBRARY' | 'BOUNTIES' | 'SWARM' | 'STUDIO' | 'SEARCH_RESULTS';

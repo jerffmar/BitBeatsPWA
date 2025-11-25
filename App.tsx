@@ -5,7 +5,7 @@ import {
   Wifi, HardDrive, Share2, Download, Radio, Volume2, User, 
   Disc, Users, Zap, Shield, Mic2, Settings, Trash2, Heart,
   Globe, Activity, LogOut, Send, MessageSquare, Check, X, FileAudio,
-  Database, AlertCircle
+  Database, AlertCircle, Music, Layers, Mic
 } from 'lucide-react';
 
 import { Track, LibraryEntry, UserStats, ViewState, StorageConfig, User as UserType, SocialPost, GlobalCatalogEntry, Bounty } from './types';
@@ -15,7 +15,7 @@ import { getReputation, discoverLocalPeers, signUpload } from './services/p2pNet
 import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties } from './services/db';
 import { initTorrentClient, seedFile, addTorrent, getTorrentStats } from './services/torrent';
 import { analyzeAudio, normalizeAndTranscode } from './services/audioEngine';
-import { searchGlobalCatalog } from './services/musicBrainz';
+import { searchGlobalCatalog, SearchResults } from './services/musicBrainz';
 import { AuthScreen } from './AuthScreen';
 import { getSession, logout } from './services/auth';
 
@@ -139,10 +139,11 @@ function App() {
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [searchFilter, setSearchFilter] = useState<'ALL' | 'SONG' | 'ALBUM' | 'ARTIST'>('ALL');
   const [searchResults, setSearchResults] = useState<{
       available: Track[],
-      catalog: GlobalCatalogEntry[]
-  }>({ available: [], catalog: [] });
+      catalog: SearchResults
+  }>({ available: [], catalog: { songs: [], albums: [], artists: [] } });
 
   // Creator Studio State
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -267,6 +268,7 @@ function App() {
 
       setIsSearching(true);
       setView('SEARCH_RESULTS');
+      setSearchFilter('ALL');
 
       // 1. Search Global Catalog (MusicBrainz)
       const catalogResults = await searchGlobalCatalog(searchQuery);
@@ -275,7 +277,7 @@ function App() {
       // In a real app, we would query the DHT or Tracker for InfoHashes matching the MBID
       const localMatches: Track[] = [];
 
-      catalogResults.forEach(cat => {
+      catalogResults.songs.forEach(cat => {
           // Simulate finding a match in our "Inventory"
           // We check MOCK_TRACKS by MBID or fuzzy title match
           const match = MOCK_TRACKS.find(t => 
@@ -489,6 +491,52 @@ function App() {
     </button>
   );
 
+  const CatalogCard = ({ item }: { item: GlobalCatalogEntry }) => {
+     // Determine icon and legend based on type
+     let Icon = Music;
+     let legend = "Song";
+     
+     if (item.type === 'album') { Icon = Disc; legend = "Album"; }
+     if (item.type === 'artist') { Icon = Mic; legend = "Artist"; }
+
+     return (
+        <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex flex-col gap-3 hover:bg-white/10 transition-colors h-full">
+            <div className="aspect-square bg-gray-800 rounded-lg flex items-center justify-center relative overflow-hidden group">
+                 {/* Placeholder Icon System since we don't have Cover Art Archive in this PoC */}
+                 <Icon size={40} className="text-gray-600" />
+                 
+                 {/* Legend / Badge */}
+                 <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-gray-300 border border-white/10 flex items-center gap-1 uppercase tracking-wider">
+                     <Icon size={10} /> {legend}
+                 </div>
+                 
+                 {/* Request Button Overlay */}
+                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                     <Button variant="secondary" className="text-xs scale-90" onClick={() => handleRequestBounty(item)}>
+                         Request
+                     </Button>
+                 </div>
+            </div>
+            
+            <div className="min-w-0">
+                <h3 className="font-bold text-gray-200 truncate" title={item.title}>{item.title}</h3>
+                <p className="text-sm text-gray-500 truncate">{item.artist}</p>
+                {item.year && <p className="text-xs text-gray-600 mt-1">{item.year}</p>}
+            </div>
+        </div>
+     );
+  };
+
+  const FilterButton = ({ type, label, icon: Icon }: { type: typeof searchFilter, label: string, icon: any }) => (
+      <button 
+        onClick={() => setSearchFilter(type)}
+        className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all ${searchFilter === type ? 'bg-brand-500 text-black border-brand-500 font-bold' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}
+      >
+          <Icon size={16} />
+          {label}
+      </button>
+  );
+
   if (!user) {
     return <AuthScreen onLogin={setUser} />;
   }
@@ -587,6 +635,14 @@ function App() {
              <div className="p-8 max-w-6xl mx-auto">
                 <h1 className="text-3xl font-bold text-white mb-6">Search Results: "{searchQuery}"</h1>
 
+                {/* Filter Widgets */}
+                <div className="flex items-center gap-3 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+                    <FilterButton type="ALL" label="All" icon={Layers} />
+                    <FilterButton type="SONG" label="Songs" icon={Music} />
+                    <FilterButton type="ALBUM" label="Albums" icon={Disc} />
+                    <FilterButton type="ARTIST" label="Artists" icon={Mic} />
+                </div>
+
                 {isSearching ? (
                    <div className="flex items-center justify-center py-20">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-500"></div>
@@ -594,18 +650,16 @@ function App() {
                 ) : (
                    <div className="space-y-12">
                        
-                       {/* 1. INVENTORY (P2P Swarm) */}
-                       <div>
-                           <div className="flex items-center gap-3 mb-4">
-                               <h2 className="text-xl font-bold text-brand-500 flex items-center gap-2">
-                                   <Check size={20} /> Available in Inventory
-                               </h2>
-                               <span className="bg-brand-500/20 text-brand-400 text-xs px-2 py-0.5 rounded font-mono">P2P Ready</span>
-                           </div>
-                           
-                           {searchResults.available.length === 0 ? (
-                               <p className="text-gray-500 italic">No exact matches found in the current swarm. Check the Global Catalog below.</p>
-                           ) : (
+                       {/* 1. INVENTORY (P2P Swarm) - Always prioritized */}
+                       {searchResults.available.length > 0 && (searchFilter === 'ALL' || searchFilter === 'SONG') && (
+                           <div>
+                               <div className="flex items-center gap-3 mb-4">
+                                   <h2 className="text-xl font-bold text-brand-500 flex items-center gap-2">
+                                       <Check size={20} /> Available in Inventory
+                                   </h2>
+                                   <span className="bg-brand-500/20 text-brand-400 text-xs px-2 py-0.5 rounded font-mono">P2P Ready</span>
+                               </div>
+                               
                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
                                    {searchResults.available.map(track => (
                                       <div key={track.id} className="group cursor-pointer bg-white/5 p-3 rounded-xl border border-brand-500/30 shadow-[0_0_15px_rgba(20,184,166,0.1)]" onClick={() => handlePlay(track)}>
@@ -623,46 +677,65 @@ function App() {
                                       </div>
                                    ))}
                                </div>
-                           )}
-                       </div>
-
-                       <div className="border-t border-white/10"></div>
+                               <div className="border-t border-white/10 mt-12"></div>
+                           </div>
+                       )}
 
                        {/* 2. VITRINE (Global Catalog) */}
-                       <div>
-                           <div className="flex items-center gap-3 mb-4">
-                               <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                   <Database size={20} /> Global Catalog (MusicBrainz)
-                               </h2>
-                               <span className="bg-white/10 text-gray-400 text-xs px-2 py-0.5 rounded font-mono">Vitrine</span>
-                           </div>
+                       
+                       {/* SONGS SECTION */}
+                       {(searchFilter === 'ALL' || searchFilter === 'SONG') && (
+                         <div>
+                            <div className="flex items-center justify-between mb-4">
+                               <h2 className="text-xl font-bold text-white flex items-center gap-2"><Music size={20} /> Songs</h2>
+                               {searchFilter === 'ALL' && searchResults.catalog.songs.length > 6 && (
+                                   <button onClick={() => setSearchFilter('SONG')} className="text-xs text-brand-500 hover:text-brand-400 font-bold">...More</button>
+                               )}
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                {(searchFilter === 'ALL' ? searchResults.catalog.songs.slice(0, 6) : searchResults.catalog.songs).map(item => (
+                                    <CatalogCard key={item.mbid} item={item} />
+                                ))}
+                            </div>
+                            {searchResults.catalog.songs.length === 0 && <p className="text-gray-500 italic text-sm">No songs found in global catalog.</p>}
+                         </div>
+                       )}
 
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                               {searchResults.catalog.map(item => {
-                                   // Don't show in catalog if it's already in inventory (deduplication logic)
-                                   const isAlreadyAvailable = searchResults.available.some(t => t.mbid === item.mbid || t.title === item.title);
-                                   if (isAlreadyAvailable) return null;
+                       {/* ALBUMS SECTION */}
+                       {(searchFilter === 'ALL' || searchFilter === 'ALBUM') && (
+                         <div>
+                            <div className="flex items-center justify-between mb-4">
+                               <h2 className="text-xl font-bold text-white flex items-center gap-2"><Disc size={20} /> Albums</h2>
+                               {searchFilter === 'ALL' && searchResults.catalog.albums.length > 3 && (
+                                   <button onClick={() => setSearchFilter('ALBUM')} className="text-xs text-brand-500 hover:text-brand-400 font-bold">...More</button>
+                               )}
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                {(searchFilter === 'ALL' ? searchResults.catalog.albums.slice(0, 3) : searchResults.catalog.albums).map(item => (
+                                    <CatalogCard key={item.mbid} item={item} />
+                                ))}
+                            </div>
+                            {searchResults.catalog.albums.length === 0 && <p className="text-gray-500 italic text-sm">No albums found in global catalog.</p>}
+                         </div>
+                       )}
 
-                                   return (
-                                       <div key={item.mbid} className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center justify-between hover:bg-white/10 transition-colors">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 bg-gray-800 rounded flex items-center justify-center text-gray-500">
-                                                    {/* MusicBrainz rarely gives images directly in search, using placeholder */}
-                                                    <Database size={20} />
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-bold text-gray-200">{item.title}</h3>
-                                                    <p className="text-sm text-gray-500">{item.artist} • {item.year}</p>
-                                                </div>
-                                            </div>
-                                            <Button variant="secondary" className="text-xs h-8" onClick={() => handleRequestBounty(item)}>
-                                                Request Bounty
-                                            </Button>
-                                       </div>
-                                   );
-                               })}
-                           </div>
-                       </div>
+                       {/* ARTISTS SECTION */}
+                       {(searchFilter === 'ALL' || searchFilter === 'ARTIST') && (
+                         <div>
+                            <div className="flex items-center justify-between mb-4">
+                               <h2 className="text-xl font-bold text-white flex items-center gap-2"><Mic size={20} /> Artists</h2>
+                               {searchFilter === 'ALL' && searchResults.catalog.artists.length > 3 && (
+                                   <button onClick={() => setSearchFilter('ARTIST')} className="text-xs text-brand-500 hover:text-brand-400 font-bold">...More</button>
+                               )}
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                {(searchFilter === 'ALL' ? searchResults.catalog.artists.slice(0, 3) : searchResults.catalog.artists).map(item => (
+                                    <CatalogCard key={item.mbid} item={item} />
+                                ))}
+                            </div>
+                             {searchResults.catalog.artists.length === 0 && <p className="text-gray-500 italic text-sm">No artists found in global catalog.</p>}
+                         </div>
+                       )}
 
                    </div>
                 )}
