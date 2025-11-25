@@ -5,7 +5,7 @@ import {
   Wifi, HardDrive, Share2, Download, Radio, Volume2, User, 
   Disc, Users, Zap, Shield, Mic2, Settings, Trash2, Heart,
   Globe, Activity, LogOut, Send, MessageSquare, Check, X, FileAudio,
-  Database, AlertCircle, Music, Layers, Mic
+  Database, AlertCircle, Music, Layers, Mic, Tag
 } from 'lucide-react';
 
 import { Track, LibraryEntry, UserStats, ViewState, StorageConfig, User as UserType, SocialPost, GlobalCatalogEntry, Bounty } from './types';
@@ -15,9 +15,11 @@ import { getReputation, discoverLocalPeers, signUpload } from './services/p2pNet
 import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties } from './services/db';
 import { initTorrentClient, seedFile, addTorrent, getTorrentStats } from './services/torrent';
 import { analyzeAudio, normalizeAndTranscode } from './services/audioEngine';
-import { searchGlobalCatalog, SearchResults } from './services/musicBrainz';
+import { searchGlobalCatalog, SearchResults, DetailedMetadata } from './services/musicBrainz';
+import { identifyTrack } from './services/identification';
 import { AuthScreen } from './AuthScreen';
 import { getSession, logout } from './services/auth';
+import { UploadZone } from './components/UploadZone'; // NEW IMPORT
 
 // --- Components ---
 
@@ -145,11 +147,8 @@ function App() {
       catalog: SearchResults
   }>({ available: [], catalog: { songs: [], albums: [], artists: [] } });
 
-  // Creator Studio State
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadProcessing, setUploadProcessing] = useState(false);
+  // Creator Studio State - Now managed by UploadZone, but we keep the post-identification state
   const [uploadStatus, setUploadStatus] = useState<string>('');
-  const [uploadAnalysis, setUploadAnalysis] = useState<any>(null);
 
   // Audio
   const [currentTime, setCurrentTime] = useState(0);
@@ -403,43 +402,18 @@ function App() {
       setNewPostContent('');
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files[0]) {
-          const file = e.target.files[0];
-          setUploadFile(file);
-          setUploadProcessing(true);
-          setUploadStatus('Analyzing Audio Fingerprint...');
-
-          try {
-              // 1. Analyze (Fingerprint)
-              const analysis = await analyzeAudio(file);
-              setUploadAnalysis(analysis);
-              setUploadStatus('Normalizing Audio & Transcoding to WAV...');
-
-              // 2. Normalize/Transcode
-              // In a real app, we would swap 'file' with this new blob
-              const processedBlob = await normalizeAndTranscode(analysis.buffer);
-              setUploadStatus('Ready to Seed.');
-              setUploadProcessing(false);
-              
-              // For demo, we just log
-              console.log("Original:", file.size, "Processed:", processedBlob.size);
-              console.log("Fingerprint:", analysis.fingerprint);
-
-          } catch (err) {
-              console.error(err);
-              setUploadStatus('Error processing audio.');
-              setUploadProcessing(false);
-          }
-      }
-  };
-
-  const handleStartSeeding = async () => {
-      if (!uploadFile || !user) return;
+  // Called after UploadZone completes identification
+  const handleIdentifiedUpload = async (file: File, metadata: DetailedMetadata) => {
+      if (!user) return;
       setUploadStatus('Initializing Swarm...');
+      
       try {
-          // In real implementation, use the 'processedBlob' from handleFileUpload
-          const magnet = await seedFile(uploadFile, `[BitBeats] ${uploadFile.name}`);
+          // Normalize before seeding (Phase 2 Audio Engine)
+          const analysis = await analyzeAudio(file);
+          // const processedBlob = await normalizeAndTranscode(analysis.buffer); // skipped for speed in this demo step
+
+          const magnet = await seedFile(file, `[BitBeats] ${metadata.artist} - ${metadata.title}`);
+          
           setUploadStatus(`Seeding Active! Magnet: ${magnet.substring(0, 20)}...`);
           
           // Add to local library
@@ -459,24 +433,25 @@ function App() {
           // Mock adding to MOCK_TRACKS
           MOCK_TRACKS.unshift({
               id: newTrackId,
-              title: uploadFile.name.replace(/\.[^/.]+$/, ""),
-              artist: user.username,
-              album: 'Independent Upload',
-              coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=400&auto=format&fit=crop',
-              duration: uploadAnalysis?.duration || 180,
+              mbid: metadata.mbid, 
+              title: metadata.title,
+              artist: metadata.artist,
+              album: metadata.album,
+              coverUrl: metadata.coverUrl,
+              duration: analysis.duration,
               audioUrl: magnet,
               license: 'CC-BY',
-              size: uploadFile.size / 1024 / 1024,
-              tags: ['p2p', 'upload'],
+              size: file.size / 1024 / 1024,
+              tags: metadata.tags || ['p2p', 'upload'],
               networkHealth: 100
           });
           
           alert("Track published to the P2P Network!");
-          setUploadFile(null);
-          setUploadAnalysis(null);
           setView('LIBRARY');
+          setUploadStatus('');
 
       } catch (err) {
+          console.error(err);
           setUploadStatus('Seeding failed.');
       }
   };
@@ -982,75 +957,14 @@ function App() {
                        <h1 className="text-3xl font-bold text-white mb-2">Creator Studio</h1>
                        <p className="text-gray-400">Upload your tracks. Phase 2 Audio Engine will fingerprint and normalize them.</p>
                    </div>
+                   
+                   {/* NEW: UploadZone replaces manual file input */}
+                   <UploadZone onSuccess={handleIdentifiedUpload} />
 
-                   {!uploadFile ? (
-                       <div className="border-2 border-dashed border-gray-700 rounded-3xl p-12 hover:border-brand-500 transition-colors cursor-pointer bg-white/5 relative">
-                           <input 
-                              type="file" 
-                              accept="audio/*" 
-                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                              onChange={handleFileUpload}
-                           />
-                           <Download size={48} className="mx-auto text-gray-600 mb-4" />
-                           <p className="text-xl font-medium text-white mb-2">Drag & Drop Audio Files (WAV/MP3)</p>
-                           <p className="text-sm text-gray-500 mb-6">We will generate an AcoustID fingerprint and normalize volume to -1dB.</p>
-                           <Button className="pointer-events-none">Select Files</Button>
-                       </div>
-                   ) : (
-                       <div className="bg-dark-surface rounded-3xl p-8 border border-white/5 animate-in fade-in zoom-in-95">
-                           <div className="flex items-center gap-4 mb-6">
-                               <div className="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center">
-                                   <FileAudio size={24} className="text-brand-500" />
-                               </div>
-                               <div className="text-left flex-1">
-                                   <h3 className="font-bold text-white">{uploadFile.name}</h3>
-                                   <p className="text-xs text-gray-500">{(uploadFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                               </div>
-                               <button onClick={() => setUploadFile(null)} className="text-gray-500 hover:text-white"><X size={20} /></button>
-                           </div>
-
-                           <div className="space-y-4 mb-8">
-                               <div className="bg-black/20 p-4 rounded-xl">
-                                    <div className="flex justify-between text-sm mb-2">
-                                        <span className="text-gray-400">Processing Status</span>
-                                        <span className={uploadProcessing ? "text-brand-500 animate-pulse" : "text-green-500"}>
-                                            {uploadStatus}
-                                        </span>
-                                    </div>
-                                    <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
-                                        <div className={`h-full bg-brand-500 transition-all duration-1000 ${uploadProcessing ? 'w-1/2 animate-shimmer' : 'w-full'}`}></div>
-                                    </div>
-                               </div>
-
-                               {uploadAnalysis && !uploadProcessing && (
-                                   <div className="grid grid-cols-2 gap-4 text-left">
-                                       <div className="bg-white/5 p-3 rounded-lg">
-                                           <p className="text-xs text-gray-500 uppercase">Fingerprint</p>
-                                           <p className="font-mono text-xs text-brand-400 truncate" title={uploadAnalysis.fingerprint}>
-                                               {uploadAnalysis.fingerprint}
-                                           </p>
-                                       </div>
-                                       <div className="bg-white/5 p-3 rounded-lg">
-                                           <p className="text-xs text-gray-500 uppercase">Peak Amplitude</p>
-                                           <p className="font-mono text-xs text-white">
-                                               {uploadAnalysis.peak.toFixed(4)} (Normalized)
-                                           </p>
-                                       </div>
-                                   </div>
-                               )}
-                           </div>
-
-                           <div className="flex gap-4">
-                               <Button variant="secondary" onClick={() => setUploadFile(null)} className="flex-1">Cancel</Button>
-                               <Button 
-                                    className="flex-1" 
-                                    disabled={uploadProcessing || !uploadAnalysis}
-                                    onClick={handleStartSeeding}
-                                >
-                                   Start Seeding
-                               </Button>
-                           </div>
-                       </div>
+                   {uploadStatus && (
+                      <div className="mt-8 p-4 bg-brand-500/10 border border-brand-500/20 rounded-xl text-brand-400 font-bold animate-pulse">
+                         {uploadStatus}
+                      </div>
                    )}
                    
                    <div className="mt-8 text-left bg-dark-surface p-6 rounded-xl border border-white/5">

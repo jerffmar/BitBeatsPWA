@@ -47,13 +47,20 @@ BitBeats is a Proof-of-Concept (PoC) Progressive Web App (PWA) demonstrating a d
 - [x] **Transcoding:** Implemented `normalizeAndTranscode` using the Web Audio API to standardize uploads to WAV/WebM.
 - [x] **Streaming Optimization:** Updated playback engine to stream directly from Torrent blobs or OPFS blobs.
 
-### Phase 3: Cryptography & Security
-- [ ] **Real Signatures:** Implement `libsodium-wrappers` for actual Ed25519 signing of uploads.
-- [ ] **Content Encryption:** Allow for private sharing/encrypted blobs for exclusive content.
+### Phase 3: De-Mocking & Real Implementation (Next Priority)
+- [ ] **Remove `MOCK_TRACKS`:** Populate Discovery view entirely from DHT/Tracker infoHashes and MusicBrainz cross-referencing.
+- [ ] **Remove Auth Mocks:** Replace `services/auth.ts` (localStorage simulation) with **Gun.js SEA** (User.auth) for true cryptographic identity.
+- [ ] **Remove `MOCK_BOUNTIES`:** Implement a real decentralized ledger in Gun.js for creating and fulfilling bounties.
+- [ ] **Remove `MOCK_PARTIES`:** Replace simulated parties with real-time Gun.js presence/room sync.
+- [ ] **Remove `MOCK_POSTS`:** Ensure the social feed pulls 100% of history from the mesh network, removing the initial mock state.
+- [ ] **Remove `discoverLocalPeers`:** Implement actual LAN peer discovery using WebRTC/Gun.js mesh.
+- [ ] **Remove `signUpload`:** Replace simulated delay with actual Ed25519 content signing logic.
+- [ ] **Remove Mock Credits:** Implement a signed transaction graph for tracking User Stats (Upload/Download) securely.
 
 ### Phase 4: Platform
-- [ ] **Mobile Wrapper:** Wrap using Capacitor or Trusted Web Activities (TWA) to enable background audio support on iOS/Android (currently limited by browser PWA restrictions).
+- [ ] **Mobile Wrapper:** Wrap using Capacitor or Trusted Web Activities (TWA) to enable background audio support on iOS/Android.
 - [ ] **Desktop Node:** Electron build for power users to run "Archive Nodes" with massive storage allowances.
+- [ ] **Content Encryption:** Allow for private sharing/encrypted blobs for exclusive content.
 
 ## 📦 Installation
 
