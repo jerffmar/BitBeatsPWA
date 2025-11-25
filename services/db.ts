@@ -1,5 +1,5 @@
 
-import { SocialPost } from '../types';
+import { SocialPost, Bounty } from '../types';
 
 // Declare global Gun types since we load via script tag
 declare global {
@@ -32,12 +32,13 @@ export const initDB = () => {
   return gun;
 };
 
+// --- SOCIAL POSTS ---
+
 export const subscribeToPosts = (callback: (post: SocialPost) => void) => {
     const db = initDB();
     if (!db) return;
     
     // Subscribe to the 'bitbeats/v1/social' node
-    // .map() iterates over each item in the list
     db.get('bitbeats').get('v1').get('social').map().on((data: any, id: string) => {
         if(data && data.content && data.author) {
             callback({
@@ -62,7 +63,42 @@ export const publishPost = async (author: string, content: string, trackId?: str
         trackId: trackId || null
     };
     
-    // Save to 'bitbeats/v1/social'
-    // set() adds to the list
     db.get('bitbeats').get('v1').get('social').set(post);
+};
+
+// --- BOUNTIES ---
+
+export const subscribeToBounties = (callback: (bounty: Bounty) => void) => {
+    const db = initDB();
+    if (!db) return;
+
+    db.get('bitbeats').get('v1').get('bounties').map().on((data: any, id: string) => {
+        if(data && data.query) {
+            callback({
+                id: id,
+                mbid: data.mbid,
+                query: data.query,
+                reward: data.reward,
+                requesterCount: data.requesterCount,
+                status: data.status,
+                fulfilledBy: data.fulfilledBy
+            });
+        }
+    });
+};
+
+export const createBounty = async (mbid: string | undefined, query: string, reward: number) => {
+    const db = initDB();
+    if (!db) return;
+
+    const bounty = {
+        mbid: mbid || null,
+        query,
+        reward,
+        requesterCount: 1,
+        status: 'OPEN',
+        timestamp: Date.now()
+    };
+
+    db.get('bitbeats').get('v1').get('bounties').set(bounty);
 };

@@ -4,6 +4,7 @@ import { Track, Bounty, SocialPost, ListenParty } from '../types';
 export const MOCK_TRACKS: Track[] = [
   {
     id: 't1',
+    mbid: '5b113466-2e9d-4790-b146-4277d337a5c8', // Fake MBID for matching demo
     title: 'Neon Horizon',
     artist: 'Synthwave Boy',
     album: 'Digital Dreams',

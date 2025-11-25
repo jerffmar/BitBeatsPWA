@@ -4,16 +4,18 @@ import {
   Play, Pause, SkipForward, SkipBack, Search, Library, 
   Wifi, HardDrive, Share2, Download, Radio, Volume2, User, 
   Disc, Users, Zap, Shield, Mic2, Settings, Trash2, Heart,
-  Globe, Activity, LogOut, Send, MessageSquare, Check, X, FileAudio
+  Globe, Activity, LogOut, Send, MessageSquare, Check, X, FileAudio,
+  Database, AlertCircle
 } from 'lucide-react';
 
-import { Track, LibraryEntry, UserStats, ViewState, StorageConfig, User as UserType, SocialPost } from './types';
+import { Track, LibraryEntry, UserStats, ViewState, StorageConfig, User as UserType, SocialPost, GlobalCatalogEntry, Bounty } from './types';
 import { MOCK_TRACKS, MOCK_BOUNTIES, MOCK_PARTIES, MOCK_POSTS, calculateRatio } from './services/mockData';
 import { saveToVault, loadFromVault, checkVaultStatus, getStoredBytes, runSmartEviction, exportTrack, opfsSupported } from './services/storage.ts';
 import { getReputation, discoverLocalPeers, signUpload } from './services/p2pNetwork';
-import { initDB, subscribeToPosts, publishPost } from './services/db';
+import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties } from './services/db';
 import { initTorrentClient, seedFile, addTorrent, getTorrentStats } from './services/torrent';
 import { analyzeAudio, normalizeAndTranscode } from './services/audioEngine';
+import { searchGlobalCatalog } from './services/musicBrainz';
 import { AuthScreen } from './AuthScreen';
 import { getSession, logout } from './services/auth';
 
@@ -131,7 +133,16 @@ function App() {
   
   // Data - Initialized with MOCK, but updated via Gun
   const [socialPosts, setSocialPosts] = useState<SocialPost[]>(MOCK_POSTS);
+  const [bounties, setBounties] = useState<Bounty[]>(MOCK_BOUNTIES);
   const [newPostContent, setNewPostContent] = useState('');
+
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<{
+      available: Track[],
+      catalog: GlobalCatalogEntry[]
+  }>({ available: [], catalog: [] });
 
   // Creator Studio State
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -176,12 +187,18 @@ function App() {
              return [post, ...prev].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
           });
        });
+       
+       subscribeToBounties((bounty) => {
+           setBounties(prev => {
+               if(prev.some(b => b.id === bounty.id)) return prev;
+               return [bounty, ...prev];
+           })
+       });
 
        // Initialize WebTorrent
        initTorrentClient();
        
        // Load existing files from mock "Vault" logic
-       // In a real app, we would scan OPFS to rebuild state
        setLibrary(initialLibrary);
     };
     init();
@@ -234,7 +251,6 @@ function App() {
           });
 
           // Update user stats roughly
-          // In real app, we'd aggregate from all torrents
           setStats(prev => ({
               ...prev,
               ratio: calculateRatio(prev.downloadedBytes + 1, prev.uploadedBytes) // Avoid div/0
@@ -243,6 +259,51 @@ function App() {
       }, 1000);
       return () => clearInterval(interval);
   }, [library, user]);
+
+  // --- Search Logic ---
+  const handleSearch = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if(!searchQuery.trim()) return;
+
+      setIsSearching(true);
+      setView('SEARCH_RESULTS');
+
+      // 1. Search Global Catalog (MusicBrainz)
+      const catalogResults = await searchGlobalCatalog(searchQuery);
+
+      // 2. Cross-reference with Inventory (Mock Tracks / P2P Swarm)
+      // In a real app, we would query the DHT or Tracker for InfoHashes matching the MBID
+      const localMatches: Track[] = [];
+
+      catalogResults.forEach(cat => {
+          // Simulate finding a match in our "Inventory"
+          // We check MOCK_TRACKS by MBID or fuzzy title match
+          const match = MOCK_TRACKS.find(t => 
+              (t.mbid === cat.mbid) || 
+              (t.title.toLowerCase().includes(cat.title.toLowerCase()) && t.artist.toLowerCase().includes(cat.artist.toLowerCase()))
+          );
+          if (match) localMatches.push(match);
+      });
+      
+      // Also add anything in MOCK_TRACKS that matches the query directly, even if not in MusicBrainz top results
+      MOCK_TRACKS.forEach(t => {
+          if (!localMatches.find(m => m.id === t.id) && (t.title.toLowerCase().includes(searchQuery.toLowerCase()) || t.artist.toLowerCase().includes(searchQuery.toLowerCase()))) {
+              localMatches.push(t);
+          }
+      });
+
+      setSearchResults({
+          available: localMatches,
+          catalog: catalogResults
+      });
+      setIsSearching(false);
+  };
+
+  const handleRequestBounty = (item: GlobalCatalogEntry) => {
+      // Create a bounty for this item
+      createBounty(item.mbid, `${item.artist} - ${item.title}`, 100);
+      alert(`Bounty created for "${item.title}"! Users who upload this will earn credits.`);
+  };
 
   // --- Handlers ---
 
@@ -294,9 +355,6 @@ function App() {
         }
 
         // If not local, try WebTorrent streaming
-        // For MOCK_TRACKS, we simulate a Magnet link if one existed, but here we fall back to HTTP
-        // In a full app, track.audioUrl would be a magnet:? link
-        
         if(track.audioUrl.startsWith('magnet:')) {
              setLibrary(prev => ({
                 ...prev,
@@ -309,9 +367,6 @@ function App() {
                 });
                 audio.src = url;
                 audio.play().then(() => setIsPlaying(true));
-                
-                // Save to vault when done (simplified)
-                // file.getBlob((err, blob) => saveToVault(track.id, blob));
             } catch(err) {
                 console.error("Torrent stream failed", err);
             }
@@ -382,7 +437,6 @@ function App() {
       setUploadStatus('Initializing Swarm...');
       try {
           // In real implementation, use the 'processedBlob' from handleFileUpload
-          // Here we seed the original for simplicity of the flow
           const magnet = await seedFile(uploadFile, `[BitBeats] ${uploadFile.name}`);
           setUploadStatus(`Seeding Active! Magnet: ${magnet.substring(0, 20)}...`);
           
@@ -400,7 +454,7 @@ function App() {
               }
           }));
 
-          // Mock adding to MOCK_TRACKS so it appears in UI
+          // Mock adding to MOCK_TRACKS
           MOCK_TRACKS.unshift({
               id: newTrackId,
               title: uploadFile.name.replace(/\.[^/.]+$/, ""),
@@ -447,6 +501,20 @@ function App() {
         <div className="flex items-center gap-2 text-brand-500">
            <Disc size={28} className={isPlaying ? "animate-spin-slow" : ""} />
            <span className="text-xl font-bold tracking-tight text-white hidden sm:block">BitBeats <span className="text-xs text-gray-500 font-normal ml-1">v2.1</span></span>
+        </div>
+
+        {/* SEARCH BAR */}
+        <div className="flex-1 max-w-xl mx-6">
+            <form onSubmit={handleSearch} className="relative">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input 
+                    type="text" 
+                    placeholder="Search MusicBrainz (Global Catalog)..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-black/20 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-brand-500/50 transition-all"
+                />
+            </form>
         </div>
 
         <div className="flex items-center gap-6">
@@ -514,6 +582,93 @@ function App() {
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto bg-dark-bg relative pb-32">
            
+           {/* SEARCH RESULTS VIEW */}
+           {view === 'SEARCH_RESULTS' && (
+             <div className="p-8 max-w-6xl mx-auto">
+                <h1 className="text-3xl font-bold text-white mb-6">Search Results: "{searchQuery}"</h1>
+
+                {isSearching ? (
+                   <div className="flex items-center justify-center py-20">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-500"></div>
+                   </div>
+                ) : (
+                   <div className="space-y-12">
+                       
+                       {/* 1. INVENTORY (P2P Swarm) */}
+                       <div>
+                           <div className="flex items-center gap-3 mb-4">
+                               <h2 className="text-xl font-bold text-brand-500 flex items-center gap-2">
+                                   <Check size={20} /> Available in Inventory
+                               </h2>
+                               <span className="bg-brand-500/20 text-brand-400 text-xs px-2 py-0.5 rounded font-mono">P2P Ready</span>
+                           </div>
+                           
+                           {searchResults.available.length === 0 ? (
+                               <p className="text-gray-500 italic">No exact matches found in the current swarm. Check the Global Catalog below.</p>
+                           ) : (
+                               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                                   {searchResults.available.map(track => (
+                                      <div key={track.id} className="group cursor-pointer bg-white/5 p-3 rounded-xl border border-brand-500/30 shadow-[0_0_15px_rgba(20,184,166,0.1)]" onClick={() => handlePlay(track)}>
+                                         <div className="aspect-square rounded-lg overflow-hidden mb-3 relative bg-gray-800">
+                                            <img src={track.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 flex items-center justify-center">
+                                                <div className="bg-brand-500 text-black rounded-full p-2 opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all">
+                                                    <Play size={20} fill="currentColor" />
+                                                </div>
+                                            </div>
+                                         </div>
+                                         <h3 className="font-bold text-white truncate text-sm">{track.title}</h3>
+                                         <p className="text-xs text-gray-400 truncate">{track.artist}</p>
+                                         <Button variant="primary" className="w-full mt-3 h-8 text-xs">Play Now</Button>
+                                      </div>
+                                   ))}
+                               </div>
+                           )}
+                       </div>
+
+                       <div className="border-t border-white/10"></div>
+
+                       {/* 2. VITRINE (Global Catalog) */}
+                       <div>
+                           <div className="flex items-center gap-3 mb-4">
+                               <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                   <Database size={20} /> Global Catalog (MusicBrainz)
+                               </h2>
+                               <span className="bg-white/10 text-gray-400 text-xs px-2 py-0.5 rounded font-mono">Vitrine</span>
+                           </div>
+
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                               {searchResults.catalog.map(item => {
+                                   // Don't show in catalog if it's already in inventory (deduplication logic)
+                                   const isAlreadyAvailable = searchResults.available.some(t => t.mbid === item.mbid || t.title === item.title);
+                                   if (isAlreadyAvailable) return null;
+
+                                   return (
+                                       <div key={item.mbid} className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center justify-between hover:bg-white/10 transition-colors">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 bg-gray-800 rounded flex items-center justify-center text-gray-500">
+                                                    {/* MusicBrainz rarely gives images directly in search, using placeholder */}
+                                                    <Database size={20} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-gray-200">{item.title}</h3>
+                                                    <p className="text-sm text-gray-500">{item.artist} • {item.year}</p>
+                                                </div>
+                                            </div>
+                                            <Button variant="secondary" className="text-xs h-8" onClick={() => handleRequestBounty(item)}>
+                                                Request Bounty
+                                            </Button>
+                                       </div>
+                                   );
+                               })}
+                           </div>
+                       </div>
+
+                   </div>
+                )}
+             </div>
+           )}
+
            {/* DISCOVERY VIEW */}
            {view === 'DISCOVERY' && (
              <div className="p-8 max-w-6xl mx-auto">
@@ -566,7 +721,7 @@ function App() {
                   </div>
 
                   <div className="space-y-4">
-                      {MOCK_BOUNTIES.map(bounty => (
+                      {bounties.map(bounty => (
                           <div key={bounty.id} className="bg-white/5 border border-white/5 rounded-xl p-5 flex items-center justify-between hover:border-white/10 transition-colors">
                               <div>
                                   <div className="flex items-center gap-3 mb-1">
@@ -575,6 +730,9 @@ function App() {
                                           <span className="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded border border-green-500/20">FULFILLED</span>
                                       ) : (
                                           <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded border border-yellow-500/20">OPEN</span>
+                                      )}
+                                      {bounty.mbid && (
+                                          <span className="text-[10px] bg-gray-700 text-gray-300 px-2 py-0.5 rounded border border-gray-600">MBID Linked</span>
                                       )}
                                   </div>
                                   <p className="text-sm text-gray-400">{bounty.requesterCount} users requesting this</p>

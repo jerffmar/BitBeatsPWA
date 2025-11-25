@@ -1,6 +1,7 @@
 
 export interface Track {
   id: string;
+  mbid?: string; // MusicBrainz ID for linking
   title: string;
   artist: string;
   album: string;
@@ -33,6 +34,7 @@ export interface UserStats {
 
 export interface Bounty {
   id: string;
+  mbid?: string; // Link to specific MusicBrainz Entry
   query: string;
   reward: number; // Credits
   requesterCount: number;
@@ -66,7 +68,17 @@ export interface LibraryEntry {
   addedAt: number;
 }
 
-export type ViewState = 'DISCOVERY' | 'LIBRARY' | 'BOUNTIES' | 'SWARM' | 'STUDIO';
+// Result from MusicBrainz API (The Vitrine)
+export interface GlobalCatalogEntry {
+  mbid: string;
+  title: string;
+  artist: string;
+  album: string;
+  year: string;
+  coverUrl?: string;
+}
+
+export type ViewState = 'DISCOVERY' | 'LIBRARY' | 'BOUNTIES' | 'SWARM' | 'STUDIO' | 'SEARCH_RESULTS';
 
 export interface StorageConfig {
   maxUsageGB: number;
