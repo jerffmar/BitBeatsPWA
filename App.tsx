@@ -4,13 +4,14 @@ import {
   Play, Pause, SkipForward, SkipBack, Search, Library, 
   Wifi, HardDrive, Share2, Download, Radio, Volume2, User, 
   Disc, Users, Zap, Shield, Mic2, Settings, Trash2, Heart,
-  Globe, Activity, LogOut
+  Globe, Activity, LogOut, Send, MessageSquare
 } from 'lucide-react';
 
-import { Track, LibraryEntry, UserStats, ViewState, StorageConfig, User as UserType } from './types';
+import { Track, LibraryEntry, UserStats, ViewState, StorageConfig, User as UserType, SocialPost } from './types';
 import { MOCK_TRACKS, MOCK_BOUNTIES, MOCK_PARTIES, MOCK_POSTS, calculateRatio } from './services/mockData';
 import { saveToVault, loadFromVault, checkVaultStatus, getStoredBytes, runSmartEviction, exportTrack, opfsSupported } from './services/storage.ts';
 import { getReputation, discoverLocalPeers, signUpload } from './services/p2pNetwork';
+import { initDB, subscribeToPosts, publishPost } from './services/db';
 import { AuthScreen } from './AuthScreen';
 import { getSession, logout } from './services/auth';
 
@@ -126,6 +127,10 @@ function App() {
   const [storageConfig, setStorageConfig] = useState<StorageConfig>({ maxUsageGB: 2, evictionStrategy: 'SMART_RARITY', ghostSeeding: false });
   const [usageMB, setUsageMB] = useState(0);
   
+  // Data - Initialized with MOCK, but updated via Gun
+  const [socialPosts, setSocialPosts] = useState<SocialPost[]>(MOCK_POSTS);
+  const [newPostContent, setNewPostContent] = useState('');
+
   // Audio
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -154,6 +159,16 @@ function App() {
 
     const init = async () => {
        const initialLibrary: Record<string, LibraryEntry> = {};
+       
+       // Initialize Gun DB and Subscribe
+       initDB();
+       subscribeToPosts((post) => {
+          setSocialPosts(prev => {
+             // Deduplicate
+             if (prev.some(p => p.id === post.id)) return prev;
+             return [post, ...prev].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
+          });
+       });
        
        // Load existing files from mock "Vault"
        for (const track of MOCK_TRACKS) {
@@ -343,6 +358,15 @@ function App() {
     }
   };
 
+  const handlePostSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newPostContent.trim() || !user) return;
+      
+      // Publish to Gun
+      await publishPost(user.username, newPostContent, currentTrack?.id);
+      setNewPostContent('');
+  };
+
   const NavItem = ({ id, icon: Icon, label }: { id: ViewState, icon: any, label: string }) => (
     <button 
       onClick={() => setView(id)}
@@ -364,7 +388,7 @@ function App() {
       <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-8 bg-dark-bg/95 backdrop-blur-md z-20">
         <div className="flex items-center gap-2 text-brand-500">
            <Disc size={28} className={isPlaying ? "animate-spin-slow" : ""} />
-           <span className="text-xl font-bold tracking-tight text-white hidden sm:block">BitBeats <span className="text-xs text-gray-500 font-normal ml-1">v2.0</span></span>
+           <span className="text-xl font-bold tracking-tight text-white hidden sm:block">BitBeats <span className="text-xs text-gray-500 font-normal ml-1">v2.1</span></span>
         </div>
 
         <div className="flex items-center gap-6">
@@ -442,7 +466,7 @@ function App() {
                     </div>
                     <div className="text-right">
                         <span className="text-xs text-brand-500 bg-brand-500/10 border border-brand-500/20 px-2 py-1 rounded">PRIVACY FIRST</span>
-                        <p className="text-[10px] text-gray-500 mt-1">Recommendations generated on-device.</p>
+                        <p className="text-sm text-gray-500 mt-1">Recommendations generated on-device.</p>
                     </div>
                 </div>
 
@@ -538,19 +562,45 @@ function App() {
                            ))}
                        </div>
 
-                       <h2 className="text-2xl font-bold text-white mb-4">Swarm Chatter</h2>
+                       <div className="flex items-center justify-between mb-4">
+                         <h2 className="text-2xl font-bold text-white">Swarm Chatter</h2>
+                         <div className="text-xs text-gray-500 flex items-center gap-2">
+                           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                           P2P Mesh Active (Gun.js)
+                         </div>
+                       </div>
+                       
+                       {/* Chat Input */}
+                       <div className="bg-white/5 rounded-xl p-4 border border-white/5 mb-6">
+                           <form onSubmit={handlePostSubmit} className="flex gap-4">
+                               <div className="flex-1">
+                                   <input 
+                                     type="text" 
+                                     value={newPostContent}
+                                     onChange={(e) => setNewPostContent(e.target.value)}
+                                     placeholder={`Say something to the swarm, ${user.username}...`}
+                                     className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-brand-500/50"
+                                   />
+                               </div>
+                               <Button variant="primary" type="submit" disabled={!newPostContent.trim()}>
+                                   <Send size={16} />
+                               </Button>
+                           </form>
+                       </div>
+
                        <div className="space-y-4">
-                           {MOCK_POSTS.map(post => (
-                               <div key={post.id} className="bg-white/5 rounded-xl p-4 border border-white/5">
+                           {socialPosts.length === 0 && <p className="text-gray-500 text-center py-8">No messages yet. Be the first!</p>}
+                           {socialPosts.map(post => (
+                               <div key={post.id} className="bg-white/5 rounded-xl p-4 border border-white/5 animate-in slide-in-from-bottom-2 fade-in duration-300">
                                    <div className="flex justify-between mb-2">
                                        <span className="font-bold text-brand-400 text-sm">@{post.author}</span>
-                                       <span className="text-xs text-gray-500">2 min ago</span>
+                                       <span className="text-xs text-gray-500">{new Date(post.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                    </div>
                                    <p className="text-gray-300 text-sm">{post.content}</p>
                                    {post.trackId && (
                                        <div className="mt-3 bg-black/20 p-2 rounded flex items-center gap-3">
                                             <Disc size={16} className="text-gray-500" />
-                                            <span className="text-xs text-gray-400">Referencing: {MOCK_TRACKS.find(t => t.id === post.trackId)?.title}</span>
+                                            <span className="text-xs text-gray-400">Referencing: {MOCK_TRACKS.find(t => t.id === post.trackId)?.title || 'Unknown Track'}</span>
                                        </div>
                                    )}
                                </div>
