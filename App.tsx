@@ -9,10 +9,10 @@ import {
 } from 'lucide-react';
 
 import { Track, LibraryEntry, UserStats, ViewState, StorageConfig, User as UserType, SocialPost, GlobalCatalogEntry, Bounty } from './types';
-import { MOCK_TRACKS, MOCK_BOUNTIES, MOCK_PARTIES, MOCK_POSTS, calculateRatio } from './services/mockData';
+import { MOCK_PARTIES, calculateRatio } from './services/mockData';
 import { saveToVault, loadFromVault, checkVaultStatus, getStoredBytes, runSmartEviction, exportTrack, opfsSupported } from './services/storage.ts';
 import { getReputation, discoverLocalPeers, signUpload } from './services/p2pNetwork';
-import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties } from './services/db';
+import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties, publishTrackMetadata, subscribeToTracks } from './services/db';
 import { initTorrentClient, seedFile, addTorrent, getTorrentStats } from './services/torrent';
 import { analyzeAudio, normalizeAndTranscode } from './services/audioEngine';
 import { searchGlobalCatalog, SearchResults, DetailedMetadata } from './services/musicBrainz';
@@ -133,9 +133,11 @@ function App() {
   const [storageConfig, setStorageConfig] = useState<StorageConfig>({ maxUsageGB: 2, evictionStrategy: 'SMART_RARITY', ghostSeeding: false });
   const [usageMB, setUsageMB] = useState(0);
   
-  // Data - Initialized with MOCK, but updated via Gun
-  const [socialPosts, setSocialPosts] = useState<SocialPost[]>(MOCK_POSTS);
-  const [bounties, setBounties] = useState<Bounty[]>(MOCK_BOUNTIES);
+  // Data - Real Gun.js Streams
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
+  const [bounties, setBounties] = useState<Bounty[]>([]);
+  
   const [newPostContent, setNewPostContent] = useState('');
 
   // Search State
@@ -147,7 +149,7 @@ function App() {
       catalog: SearchResults
   }>({ available: [], catalog: { songs: [], albums: [], artists: [] } });
 
-  // Creator Studio State - Now managed by UploadZone, but we keep the post-identification state
+  // Creator Studio State
   const [uploadStatus, setUploadStatus] = useState<string>('');
 
   // Audio
@@ -166,10 +168,9 @@ function App() {
 
   // --- Auth Check ---
   useEffect(() => {
-    const session = getSession();
-    if (session) {
-      setUser(session);
-    }
+    getSession().then(session => {
+        if (session) setUser(session);
+    });
   }, []);
 
   // --- Initialization ---
@@ -181,6 +182,8 @@ function App() {
        
        // Initialize Gun DB
        initDB();
+       
+       // Subscribe to Social Feed
        subscribeToPosts((post) => {
           setSocialPosts(prev => {
              if (prev.some(p => p.id === post.id)) return prev;
@@ -188,11 +191,20 @@ function App() {
           });
        });
        
+       // Subscribe to Bounties
        subscribeToBounties((bounty) => {
            setBounties(prev => {
                if(prev.some(b => b.id === bounty.id)) return prev;
                return [bounty, ...prev];
            })
+       });
+
+       // Subscribe to Tracks (Discovery)
+       subscribeToTracks((track) => {
+           setTracks(prev => {
+               if (prev.some(t => t.id === track.id)) return prev;
+               return [track, ...prev];
+           });
        });
 
        // Initialize WebTorrent
@@ -272,22 +284,20 @@ function App() {
       // 1. Search Global Catalog (MusicBrainz)
       const catalogResults = await searchGlobalCatalog(searchQuery);
 
-      // 2. Cross-reference with Inventory (Mock Tracks / P2P Swarm)
-      // In a real app, we would query the DHT or Tracker for InfoHashes matching the MBID
+      // 2. Cross-reference with Real Inventory (Gun.js Tracks)
       const localMatches: Track[] = [];
 
       catalogResults.songs.forEach(cat => {
-          // Simulate finding a match in our "Inventory"
-          // We check MOCK_TRACKS by MBID or fuzzy title match
-          const match = MOCK_TRACKS.find(t => 
+          // Check loaded tracks for MBID or fuzzy title match
+          const match = tracks.find(t => 
               (t.mbid === cat.mbid) || 
               (t.title.toLowerCase().includes(cat.title.toLowerCase()) && t.artist.toLowerCase().includes(cat.artist.toLowerCase()))
           );
           if (match) localMatches.push(match);
       });
       
-      // Also add anything in MOCK_TRACKS that matches the query directly, even if not in MusicBrainz top results
-      MOCK_TRACKS.forEach(t => {
+      // Also add anything in tracks that matches the query directly
+      tracks.forEach(t => {
           if (!localMatches.find(m => m.id === t.id) && (t.title.toLowerCase().includes(searchQuery.toLowerCase()) || t.artist.toLowerCase().includes(searchQuery.toLowerCase()))) {
               localMatches.push(t);
           }
@@ -383,7 +393,7 @@ function App() {
   };
 
   const handleEvictionCheck = async () => {
-    const deleted = await runSmartEviction(library, MOCK_TRACKS, storageConfig, usageMB);
+    const deleted = await runSmartEviction(library, tracks, storageConfig, usageMB);
     if (deleted.length > 0) {
         setLibrary(prev => {
             const next = { ...prev };
@@ -412,27 +422,13 @@ function App() {
           const analysis = await analyzeAudio(file);
           // const processedBlob = await normalizeAndTranscode(analysis.buffer); // skipped for speed in this demo step
 
+          // Seed via WebTorrent to get Magnet URI
           const magnet = await seedFile(file, `[BitBeats] ${metadata.artist} - ${metadata.title}`);
           
           setUploadStatus(`Seeding Active! Magnet: ${magnet.substring(0, 20)}...`);
           
-          // Add to local library
-          const newTrackId = 't_' + Math.random().toString(36).substr(2,5);
-          setLibrary(prev => ({
-              ...prev,
-              [newTrackId]: {
-                  trackId: newTrackId,
-                  status: 'SEEDING',
-                  progress: 1,
-                  addedAt: Date.now(),
-                  lastPlayed: Date.now(),
-                  localPath: magnet
-              }
-          }));
-
-          // Mock adding to MOCK_TRACKS
-          MOCK_TRACKS.unshift({
-              id: newTrackId,
+          // Publish Metadata to Gun.js (Real Inventory)
+          const newTrack: Partial<Track> = {
               mbid: metadata.mbid, 
               title: metadata.title,
               artist: metadata.artist,
@@ -443,8 +439,16 @@ function App() {
               license: 'CC-BY',
               size: file.size / 1024 / 1024,
               tags: metadata.tags || ['p2p', 'upload'],
-              networkHealth: 100
-          });
+              bpm: 120, // Placeholder
+              networkHealth: 100,
+              artistSignature: 'pending_sig'
+          };
+
+          await publishTrackMetadata(newTrack);
+
+          // Add to local library
+          // We don't have the Gun ID yet until subscription fires, but we can optimistically add or wait.
+          // For now, we wait for the subscription to update `tracks` state.
           
           alert("Track published to the P2P Network!");
           setView('LIBRARY');
@@ -523,7 +527,7 @@ function App() {
       <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-8 bg-dark-bg/95 backdrop-blur-md z-20">
         <div className="flex items-center gap-2 text-brand-500">
            <Disc size={28} className={isPlaying ? "animate-spin-slow" : ""} />
-           <span className="text-xl font-bold tracking-tight text-white hidden sm:block">BitBeats <span className="text-xs text-gray-500 font-normal ml-1">v2.1</span></span>
+           <span className="text-xl font-bold tracking-tight text-white hidden sm:block">BitBeats <span className="text-xs text-gray-500 font-normal ml-1">v3.0</span></span>
         </div>
 
         {/* SEARCH BAR */}
@@ -731,27 +735,35 @@ function App() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                   {MOCK_TRACKS.map(track => (
-                      <div key={track.id} className="group cursor-pointer" onClick={() => handlePlay(track)}>
-                         <div className="aspect-square rounded-xl overflow-hidden mb-3 relative shadow-2xl bg-gray-800">
-                            <img src={track.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                            {/* Network Health Indicator */}
-                            <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-white flex items-center gap-1">
-                                <Activity size={10} className={track.networkHealth > 80 ? "text-green-400" : "text-red-400"} />
-                                {track.networkHealth}% Avail
+                {tracks.length === 0 ? (
+                    <div className="text-center py-20 text-gray-500">
+                        <div className="mb-4 text-4xl">🕸️</div>
+                        <p>Waiting for peers...</p>
+                        <p className="text-sm">Be the first to seed content in the Studio!</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                    {tracks.map(track => (
+                        <div key={track.id} className="group cursor-pointer" onClick={() => handlePlay(track)}>
+                            <div className="aspect-square rounded-xl overflow-hidden mb-3 relative shadow-2xl bg-gray-800">
+                                <img src={track.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                {/* Network Health Indicator */}
+                                <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-white flex items-center gap-1">
+                                    <Activity size={10} className={track.networkHealth > 80 ? "text-green-400" : "text-red-400"} />
+                                    {track.networkHealth}% Avail
+                                </div>
+                                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                                <div className="bg-white text-black rounded-full p-3 opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all shadow-xl">
+                                    <Play size={24} fill="currentColor" />
+                                </div>
+                                </div>
                             </div>
-                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                               <div className="bg-white text-black rounded-full p-3 opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all shadow-xl">
-                                  <Play size={24} fill="currentColor" />
-                               </div>
-                            </div>
-                         </div>
-                         <h3 className="font-bold text-white truncate">{track.title}</h3>
-                         <p className="text-sm text-gray-500 truncate">{track.artist}</p>
-                      </div>
-                   ))}
-                </div>
+                            <h3 className="font-bold text-white truncate">{track.title}</h3>
+                            <p className="text-sm text-gray-500 truncate">{track.artist}</p>
+                        </div>
+                    ))}
+                    </div>
+                )}
              </div>
            )}
 
@@ -769,6 +781,7 @@ function App() {
                   </div>
 
                   <div className="space-y-4">
+                      {bounties.length === 0 && <p className="text-gray-500 text-center">No active bounties. Check back later.</p>}
                       {bounties.map(bounty => (
                           <div key={bounty.id} className="bg-white/5 border border-white/5 rounded-xl p-5 flex items-center justify-between hover:border-white/10 transition-colors">
                               <div>
@@ -814,7 +827,7 @@ function App() {
                                        </span>
                                    </div>
                                    <h3 className="font-bold text-white text-lg">{party.host}'s Room</h3>
-                                   <p className="text-sm text-gray-400 mb-4">Playing: {MOCK_TRACKS.find(t=>t.id === party.currentTrackId)?.title}</p>
+                                   <p className="text-sm text-gray-400 mb-4">Playing: {tracks.find(t=>t.id === party.currentTrackId)?.title}</p>
                                    <div className="flex items-center justify-between">
                                        <div className="flex -space-x-2">
                                            {[1,2,3].map(i => <div key={i} className="w-8 h-8 rounded-full bg-gray-700 border-2 border-dark-bg"></div>)}
@@ -864,7 +877,7 @@ function App() {
                                    {post.trackId && (
                                        <div className="mt-3 bg-black/20 p-2 rounded flex items-center gap-3">
                                             <Disc size={16} className="text-gray-500" />
-                                            <span className="text-xs text-gray-400">Referencing: {MOCK_TRACKS.find(t => t.id === post.trackId)?.title || 'Unknown Track'}</span>
+                                            <span className="text-xs text-gray-400">Referencing: {tracks.find(t => t.id === post.trackId)?.title || 'Unknown Track'}</span>
                                        </div>
                                    )}
                                </div>
@@ -930,7 +943,7 @@ function App() {
 
                 <div className="space-y-2">
                    {Object.values(library).map(entry => {
-                      const track = MOCK_TRACKS.find(t => t.id === entry.trackId);
+                      const track = tracks.find(t => t.id === entry.trackId);
                       if (!track) return null;
                       return (
                         <TrackRow 
@@ -972,7 +985,7 @@ function App() {
                        <div className="flex items-center justify-between bg-black/30 p-4 rounded-lg">
                            <div>
                                <p className="text-xs text-gray-500 uppercase">Your Public Key</p>
-                               <p className="font-mono text-sm text-brand-400">ed25519_pub_8a92...9x12</p>
+                               <p className="font-mono text-sm text-brand-400">{user.id.substring(0, 24)}...</p>
                            </div>
                            <Button variant="secondary" className="text-xs">Export Key</Button>
                        </div>

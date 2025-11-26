@@ -1,5 +1,5 @@
 
-import { SocialPost, Bounty } from '../types';
+import { SocialPost, Bounty, Track } from '../types';
 
 // Declare global Gun types since we load via script tag
 declare global {
@@ -12,7 +12,8 @@ declare global {
 // Public relay peers for the mesh network
 const PEERS = [
   'https://gun-manhattan.herokuapp.com/gun', 
-  'https://plato.design/gun'
+  'https://plato.design/gun',
+  'https://relay.peer.ooo/gun'
 ];
 
 let gun: any;
@@ -25,17 +26,72 @@ export const initDB = () => {
   if (!gun) {
     gun = window.Gun({ 
         peers: PEERS,
-        localStorage: false // We use OPFS for files, keeping DB in memory/network for now to avoid quota issues
+        localStorage: false // We maintain manual session persistence for keys, keeping graph in memory/network
     });
     console.log("🔫 Gun DB Initialized - Connected to Swarm");
   }
   return gun;
 };
 
+export const getGun = () => {
+    if (!gun) return initDB();
+    return gun;
+};
+
+// --- TRACKS (INVENTORY) ---
+
+export const subscribeToTracks = (callback: (track: Track) => void) => {
+    const db = getGun();
+    if (!db) return;
+
+    // Subscribe to the 'bitbeats/v1/tracks' node
+    db.get('bitbeats').get('v1').get('tracks').map().on((data: any, id: string) => {
+        if (data && data.title && data.audioUrl) {
+            callback({
+                id: id, // Gun node ID
+                mbid: data.mbid,
+                title: data.title,
+                artist: data.artist,
+                album: data.album,
+                coverUrl: data.coverUrl,
+                duration: data.duration,
+                audioUrl: data.audioUrl, // Magnet URI
+                license: data.license || 'CC-BY',
+                size: data.size,
+                tags: data.tags ? JSON.parse(data.tags) : [],
+                bpm: data.bpm,
+                networkHealth: Math.floor(Math.random() * 100), // Simulating network health for now
+                artistSignature: data.artistSignature
+            });
+        }
+    });
+};
+
+export const publishTrackMetadata = async (track: Partial<Track>) => {
+    const db = getGun();
+    const user = db.user();
+    if (!db || !user.is) return;
+
+    const trackId = 't_' + Math.random().toString(36).substr(2, 9);
+    
+    const trackData = {
+        ...track,
+        tags: JSON.stringify(track.tags || []), // Gun doesn't store arrays natively well
+        uploadedBy: user.is.pub,
+        timestamp: Date.now()
+    };
+
+    // Index by ID
+    db.get('bitbeats').get('v1').get('tracks').get(trackId).put(trackData);
+    
+    // Also link to user profile (optional, for future "My Uploads" view)
+    user.get('uploads').set(db.get('bitbeats').get('v1').get('tracks').get(trackId));
+};
+
 // --- SOCIAL POSTS ---
 
 export const subscribeToPosts = (callback: (post: SocialPost) => void) => {
-    const db = initDB();
+    const db = getGun();
     if (!db) return;
     
     // Subscribe to the 'bitbeats/v1/social' node
@@ -53,7 +109,7 @@ export const subscribeToPosts = (callback: (post: SocialPost) => void) => {
 };
 
 export const publishPost = async (author: string, content: string, trackId?: string) => {
-    const db = initDB();
+    const db = getGun();
     if (!db) return;
     
     const post = {
@@ -69,7 +125,7 @@ export const publishPost = async (author: string, content: string, trackId?: str
 // --- BOUNTIES ---
 
 export const subscribeToBounties = (callback: (bounty: Bounty) => void) => {
-    const db = initDB();
+    const db = getGun();
     if (!db) return;
 
     db.get('bitbeats').get('v1').get('bounties').map().on((data: any, id: string) => {
@@ -79,7 +135,7 @@ export const subscribeToBounties = (callback: (bounty: Bounty) => void) => {
                 mbid: data.mbid,
                 query: data.query,
                 reward: data.reward,
-                requesterCount: data.requesterCount,
+                requesterCount: data.requesterCount || 1,
                 status: data.status,
                 fulfilledBy: data.fulfilledBy
             });
@@ -88,7 +144,7 @@ export const subscribeToBounties = (callback: (bounty: Bounty) => void) => {
 };
 
 export const createBounty = async (mbid: string | undefined, query: string, reward: number) => {
-    const db = initDB();
+    const db = getGun();
     if (!db) return;
 
     const bounty = {

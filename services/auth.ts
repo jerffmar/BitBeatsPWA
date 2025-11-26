@@ -1,80 +1,97 @@
 
 import { User } from '../types';
+import { getGun } from './db';
 
-const STORAGE_KEY_USERS = 'bitbeats_users_db';
-const STORAGE_KEY_SESSION = 'bitbeats_session';
+const STORAGE_KEY_PAIR = 'bitbeats_user_pair';
 
-interface StoredUser extends User {
-  passwordHash: string; // In a real app, use proper hashing. Here we simulate.
-}
+// We persist the SEA KeyPair in localStorage manually 
+// because we have disabled Gun's automatic localStorage sync 
+// to prevent the entire graph from filling up the browser quota.
 
-export const getSession = (): User | null => {
-  const sessionJson = localStorage.getItem(STORAGE_KEY_SESSION);
-  return sessionJson ? JSON.parse(sessionJson) : null;
+export const getSession = async (): Promise<User | null> => {
+  const pairStr = localStorage.getItem(STORAGE_KEY_PAIR);
+  if (!pairStr) return null;
+
+  try {
+    const pair = JSON.parse(pairStr);
+    const gun = getGun();
+    const user = gun.user();
+    
+    if (user.is) {
+      // Already authenticated in memory
+      return {
+        id: user.is.pub,
+        username: user.is.alias,
+        handle: '@' + user.is.alias,
+        joinedAt: Date.now() // Gun doesn't store this by default on root, simplified
+      };
+    }
+
+    // Re-authenticate with stored keys
+    return new Promise((resolve) => {
+      user.auth(pair, (ack: any) => {
+        if (ack.err) {
+          resolve(null);
+        } else {
+          resolve({
+            id: ack.sea.pub,
+            username: ack.sea.alias || 'Anon',
+            handle: '@' + (ack.sea.alias || 'Anon'),
+            joinedAt: Date.now()
+          });
+        }
+      });
+    });
+
+  } catch (e) {
+    return null;
+  }
 };
 
 export const logout = () => {
-  localStorage.removeItem(STORAGE_KEY_SESSION);
+  const gun = getGun();
+  gun.user().leave();
+  localStorage.removeItem(STORAGE_KEY_PAIR);
 };
 
 export const login = async (username: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> => {
-  // Simulate network delay
-  await new Promise(r => setTimeout(r, 600));
-
-  const db = JSON.parse(localStorage.getItem(STORAGE_KEY_USERS) || '[]');
-  const user = db.find((u: StoredUser) => u.username.toLowerCase() === username.toLowerCase());
-
-  if (!user) {
-    return { success: false, error: 'User not found' };
-  }
-
-  // Simple string comparison for mock purposes. REAL APP MUST HASH.
-  if (user.passwordHash !== password) {
-    return { success: false, error: 'Invalid credentials' };
-  }
-
-  const sessionUser: User = {
-    id: user.id,
-    username: user.username,
-    handle: user.handle,
-    joinedAt: user.joinedAt
-  };
-
-  localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(sessionUser));
-  return { success: true, user: sessionUser };
+  const gun = getGun();
+  
+  return new Promise((resolve) => {
+    gun.user().auth(username, password, (ack: any) => {
+      if (ack.err) {
+        resolve({ success: false, error: ack.err });
+      } else {
+        // Save keypair for persistence
+        localStorage.setItem(STORAGE_KEY_PAIR, JSON.stringify(ack.sea));
+        
+        resolve({ 
+          success: true, 
+          user: {
+            id: ack.sea.pub,
+            username: ack.alias,
+            handle: '@' + ack.alias,
+            joinedAt: Date.now()
+          } 
+        });
+      }
+    });
+  });
 };
 
 export const register = async (username: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> => {
-  await new Promise(r => setTimeout(r, 800));
+  const gun = getGun();
 
   if (username.length < 3) return { success: false, error: 'Username too short' };
-  if (password.length < 4) return { success: false, error: 'Password too weak' };
-
-  const db: StoredUser[] = JSON.parse(localStorage.getItem(STORAGE_KEY_USERS) || '[]');
   
-  if (db.find(u => u.username.toLowerCase() === username.toLowerCase())) {
-    return { success: false, error: 'Username already taken' };
-  }
-
-  const newUser: StoredUser = {
-    id: 'u_' + Math.random().toString(36).substr(2, 9),
-    username,
-    handle: '@' + username.replace(/\s+/g, ''),
-    passwordHash: password,
-    joinedAt: Date.now()
-  };
-
-  db.push(newUser);
-  localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(db));
-
-  // Auto login
-  const sessionUser: User = {
-    id: newUser.id,
-    username: newUser.username,
-    handle: newUser.handle,
-    joinedAt: newUser.joinedAt
-  };
-  localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(sessionUser));
-
-  return { success: true, user: sessionUser };
+  return new Promise((resolve) => {
+    gun.user().create(username, password, (ack: any) => {
+      if (ack.err) {
+         resolve({ success: false, error: ack.err });
+      } else {
+         // Auto login after create
+         login(username, password).then(resolve);
+      }
+    });
+  });
 };
