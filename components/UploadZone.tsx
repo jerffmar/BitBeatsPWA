@@ -1,15 +1,14 @@
-
-import React, { useCallback } from 'react';
-import { useAudioIdentification } from '../hooks/useAudioIdentification';
+import React, { useCallback, useEffect } from 'react';
+import { useTrackIdentifier } from '../hooks/useTrackIdentifier';
 import { DetailedMetadata } from '../services/musicBrainz';
-import { Upload, Loader, Music, CheckCircle, AlertTriangle, XCircle, FileAudio } from 'lucide-react';
+import { Upload, Music, CheckCircle, AlertTriangle, XCircle, Database, Search, Fingerprint } from 'lucide-react';
 
 interface UploadZoneProps {
   onSuccess: (file: File, metadata: DetailedMetadata) => void;
 }
 
 export const UploadZone: React.FC<UploadZoneProps> = ({ onSuccess }) => {
-  const { status, metadata, error, complianceStatus, processFile, reset } = useAudioIdentification();
+  const { status, result, error, complianceStatus, identify, reset } = useTrackIdentifier();
   const [dragActive, setDragActive] = React.useState(false);
   const [file, setFile] = React.useState<File | null>(null);
 
@@ -31,56 +30,60 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onSuccess }) => {
       const droppedFile = e.dataTransfer.files[0];
       if (droppedFile.type.startsWith('audio/')) {
         setFile(droppedFile);
-        processFile(droppedFile);
+        identify(droppedFile);
       }
     }
-  }, [processFile]);
+  }, [identify]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     e.preventDefault();
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       setFile(selectedFile);
-      processFile(selectedFile);
+      identify(selectedFile);
     }
-  }, [processFile]);
+  }, [identify]);
 
-  // Trigger parent success callback when identification completes
-  React.useEffect(() => {
-    if (status === 'success' && metadata && file) {
-      // Small delay to show the success state before moving on? 
-      // Or just let the user click "Next"? 
-      // Let's provide a "Next" button in the UI instead of auto-advance for better UX.
+  const handleConfirm = () => {
+    if (file && result) {
+      // Map IdentificationResult to DetailedMetadata for the parent component
+      const detailed: DetailedMetadata = {
+        mbid: result.mbid,
+        title: result.title,
+        artist: result.artist,
+        album: result.album,
+        year: result.year,
+        coverUrl: result.coverUrl || '',
+        tags: []
+      };
+      onSuccess(file, detailed);
     }
-  }, [status, metadata, file]);
+  };
 
-  const Steps = () => (
-    <div className="flex items-center justify-center gap-2 mt-6 text-sm">
-        <StepIndicator current={status} step="decoding" label="Decoding" />
-        <div className="w-4 h-0.5 bg-gray-700"></div>
-        <StepIndicator current={status} step="fingerprinting" label="Fingerprinting" />
-        <div className="w-4 h-0.5 bg-gray-700"></div>
-        <StepIndicator current={status} step="identifying" label="Identifying" />
-    </div>
-  );
+  // --- RENDER HELPERS ---
 
-  const StepIndicator = ({ current, step, label }: { current: string, step: string, label: string }) => {
-     const isComplete = getStepIndex(current) > getStepIndex(step);
-     const isActive = current === step;
+  const StepIndicator = ({ stepStatus, label, icon: Icon }: { stepStatus: string, label: string, icon: any }) => {
+     // Determine if this step is active, pending, or complete based on global status
+     // Simplified logic for linear progression visualization
+     let state = 'pending';
      
-     let colorClass = "text-gray-600 bg-gray-800 border-gray-700";
-     if (isComplete) colorClass = "text-green-500 bg-green-500/10 border-green-500/20";
-     if (isActive) colorClass = "text-brand-500 bg-brand-500/10 border-brand-500/20 animate-pulse";
+     if (status === stepStatus) state = 'active';
+     
+     // Crude ordering check
+     const order = ['fingerprinting', 'checking_db', 'checking_external', 'fuzzy_matching', 'success'];
+     if (order.indexOf(status) > order.indexOf(stepStatus)) state = 'complete';
+     if (status === 'success') state = 'complete';
+
+     let colorClass = "text-gray-600 border-gray-700 bg-gray-900";
+     if (state === 'active') colorClass = "text-brand-500 border-brand-500/50 bg-brand-500/10 animate-pulse";
+     if (state === 'complete') colorClass = "text-green-500 border-green-500/50 bg-green-500/10";
 
      return (
-         <div className={`px-3 py-1 rounded-full border ${colorClass} transition-colors duration-300`}>
+         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${colorClass}`}>
+             <Icon size={12} />
              {label}
          </div>
      );
-  };
-
-  const getStepIndex = (s: string) => {
-      return ['idle', 'decoding', 'fingerprinting', 'identifying', 'success'].indexOf(s);
   };
 
   // --- RENDERING STATES ---
@@ -107,20 +110,28 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onSuccess }) => {
             </div>
             <h3 className="text-2xl font-bold text-white mb-2">Drag & Drop Audio</h3>
             <p className="text-gray-400 max-w-sm">
-                Supports MP3, FLAC, WAV. We generate a digital fingerprint in your browser.
+                Supports MP3, FLAC, WAV. We use hybrid fingerprinting to identify your tracks.
             </p>
         </div>
     );
   }
 
-  if (status === 'error') {
+  if (status === 'error' || status === 'rejected') {
       return (
           <div className="bg-red-500/10 border border-red-500/20 rounded-3xl p-8 text-center animate-in fade-in zoom-in-95">
               <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
-                  {complianceStatus === 'blacklisted' ? <AlertTriangle size={32} /> : <XCircle size={32} />}
+                  {complianceStatus === 'rejected' ? <AlertTriangle size={32} /> : <XCircle size={32} />}
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">Identification Failed</h3>
+              <h3 className="text-xl font-bold text-white mb-2">
+                {complianceStatus === 'rejected' ? 'Compliance Check Failed' : 'Identification Failed'}
+              </h3>
               <p className="text-red-300 mb-6">{error}</p>
+              {result && complianceStatus === 'rejected' && (
+                  <div className="bg-black/30 p-4 rounded-xl mb-6 max-w-md mx-auto border border-red-500/20">
+                      <p className="text-sm text-gray-400">Identified as:</p>
+                      <p className="text-white font-bold">{result.artist} - {result.title}</p>
+                  </div>
+              )}
               <button 
                 onClick={reset}
                 className="bg-white/10 hover:bg-white/20 text-white px-6 py-2 rounded-full transition-colors"
@@ -131,31 +142,45 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onSuccess }) => {
       );
   }
 
-  if (status === 'success' && metadata) {
+  if (status === 'success' && result) {
       return (
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 border border-green-500/30 rounded-3xl p-8 animate-in fade-in zoom-in-95 relative overflow-hidden">
                {/* Background Glow */}
                <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
                <div className="relative z-10">
-                   <div className="flex items-center gap-2 mb-6 text-green-400 font-bold uppercase text-xs tracking-wider">
-                       <CheckCircle size={16} /> Analysis Complete
+                   <div className="flex items-center justify-between mb-6">
+                       <div className="flex items-center gap-2 text-green-400 font-bold uppercase text-xs tracking-wider">
+                           <CheckCircle size={16} /> Analysis Complete
+                       </div>
+                       <div className="text-xs bg-white/5 px-2 py-1 rounded text-gray-400 border border-white/10 font-mono">
+                           Method: {result.methodUsed.toUpperCase()}
+                       </div>
                    </div>
 
                    <div className="flex items-start gap-6">
-                       <img src={metadata.coverUrl} className="w-32 h-32 rounded-lg shadow-2xl object-cover bg-black" />
-                       <div className="flex-1">
-                           <h3 className="text-2xl font-bold text-white mb-1">{metadata.title}</h3>
-                           <p className="text-lg text-gray-300 mb-4">{metadata.artist}</p>
+                       <div className="w-32 h-32 rounded-lg shadow-2xl bg-gray-800 overflow-hidden flex-shrink-0">
+                           {result.coverUrl ? (
+                               <img src={result.coverUrl} className="w-full h-full object-cover" />
+                           ) : (
+                               <div className="w-full h-full flex items-center justify-center text-gray-600"><Music size={32} /></div>
+                           )}
+                       </div>
+                       
+                       <div className="flex-1 min-w-0">
+                           <h3 className="text-2xl font-bold text-white mb-1 truncate" title={result.title}>{result.title}</h3>
+                           <p className="text-lg text-gray-300 mb-4 truncate">{result.artist}</p>
                            
                            <div className="grid grid-cols-2 gap-4 text-sm">
                                <div className="bg-black/30 p-3 rounded-lg">
                                    <span className="block text-gray-500 text-xs uppercase mb-1">Album</span>
-                                   <span className="text-gray-300 truncate block">{metadata.album}</span>
+                                   <span className="text-gray-300 truncate block">{result.album}</span>
                                </div>
                                <div className="bg-black/30 p-3 rounded-lg">
-                                   <span className="block text-gray-500 text-xs uppercase mb-1">Fingerprint ID</span>
-                                   <span className="text-brand-400 font-mono truncate block">fp_v1_8x92...</span>
+                                   <span className="block text-gray-500 text-xs uppercase mb-1">Confidence</span>
+                                   <span className="text-brand-400 font-mono truncate block">
+                                       {(result.score <= 1 ? result.score * 100 : result.score).toFixed(0)}% Match
+                                   </span>
                                </div>
                            </div>
                        </div>
@@ -166,10 +191,10 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onSuccess }) => {
                            Cancel
                        </button>
                        <button 
-                           onClick={() => file && onSuccess(file, metadata)}
+                           onClick={handleConfirm}
                            className="flex-[2] py-3 rounded-xl bg-brand-500 hover:bg-brand-400 text-black font-bold shadow-lg shadow-brand-500/20 transition-all active:scale-95"
                        >
-                           Confirm & Seed to Swarm
+                           Confirm & Seed
                        </button>
                    </div>
                </div>
@@ -177,7 +202,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onSuccess }) => {
       );
   }
 
-  // Loading State
+  // Processing State
   return (
       <div className="border border-white/10 bg-white/5 rounded-3xl p-12 text-center">
           <div className="w-16 h-16 mx-auto mb-6 relative">
@@ -185,9 +210,16 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onSuccess }) => {
               <div className="absolute inset-0 border-4 border-brand-500 rounded-full border-t-transparent animate-spin"></div>
               <Music size={24} className="absolute inset-0 m-auto text-brand-500" />
           </div>
-          <h3 className="text-xl font-bold text-white mb-2">Analyzing Audio...</h3>
-          <p className="text-gray-400 text-sm">{file?.name}</p>
-          <Steps />
+          <h3 className="text-xl font-bold text-white mb-6">Analyzing Audio...</h3>
+          
+          <div className="flex flex-wrap items-center justify-center gap-3">
+              <StepIndicator stepStatus="fingerprinting" label="Fingerprinting" icon={Fingerprint} />
+              <StepIndicator stepStatus="checking_db" label="Internal DB" icon={Database} />
+              <StepIndicator stepStatus="checking_external" label="AcoustID" icon={Search} />
+              <StepIndicator stepStatus="fuzzy_matching" label="Fuzzy Fallback" icon={Music} />
+          </div>
+          
+          <p className="text-gray-500 text-sm mt-6 font-mono">{file?.name}</p>
       </div>
   );
 };
