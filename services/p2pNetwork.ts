@@ -1,5 +1,7 @@
 
 import { UserStats } from '../types';
+import { getGun } from './db';
+import { getKeyPair } from './auth';
 
 /**
  * P2P NETWORK SERVICE
@@ -16,22 +18,34 @@ export const getReputation = (ratio: number, uploads: number): UserStats['reputa
     return 'Seeder';
 };
 
-// --- LAN Sync Handshake (Simulation) ---
+// --- LAN/Mesh Peer Discovery ---
 
 export const discoverLocalPeers = async (): Promise<number> => {
-    // In a real implementation, this would use mDNS or WebRTC broadcast
-    // Simulating discovery delay
-    await new Promise(r => setTimeout(r, 2000));
-    return Math.floor(Math.random() * 3); // Found 0-3 local peers
+    const gun = getGun();
+    if (!gun) return 0;
+
+    // Access internal Gun mesh state (opt.peers)
+    // This isn't strictly "LAN" only, but shows active mesh connections
+    // @ts-ignore
+    const peers = gun._.opt.peers;
+    if (!peers) return 0;
+    
+    return Object.keys(peers).length;
 };
 
-// --- Crypto Signing (Simulation) ---
+// --- Crypto Signing (Real SEA) ---
 
-export const signUpload = async (fileBlob: Blob, privateKey: string): Promise<string> => {
-    // Simulating Ed25519 signature generation using libsodium
-    console.log("Signing blob with size:", fileBlob.size);
-    await new Promise(r => setTimeout(r, 1000));
-    return "sig_ed25519_" + Math.random().toString(36).substring(2);
+export const signUpload = async (fileBlob: Blob, dataToSign: string): Promise<string> => {
+    const pair = getKeyPair();
+    if (!pair) throw new Error("User keypair not found. Cannot sign.");
+
+    if (!window.SEA) throw new Error("SEA not loaded");
+
+    console.log("🔐 Signing content with Ed25519...");
+    
+    // We sign the hash/metadata of the upload
+    const signature = await window.SEA.sign(dataToSign, pair);
+    return signature;
 };
 
 // --- Ghost Seeding ---

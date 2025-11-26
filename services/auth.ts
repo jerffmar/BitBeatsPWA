@@ -8,6 +8,16 @@ const STORAGE_KEY_PAIR = 'bitbeats_user_pair';
 // because we have disabled Gun's automatic localStorage sync 
 // to prevent the entire graph from filling up the browser quota.
 
+export const getKeyPair = (): any => {
+    const pairStr = localStorage.getItem(STORAGE_KEY_PAIR);
+    if (!pairStr) return null;
+    try {
+        return JSON.parse(pairStr);
+    } catch {
+        return null;
+    }
+};
+
 export const getSession = async (): Promise<User | null> => {
   const pairStr = localStorage.getItem(STORAGE_KEY_PAIR);
   if (!pairStr) return null;

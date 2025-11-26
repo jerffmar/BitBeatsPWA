@@ -57,15 +57,23 @@ export const searchGlobalCatalog = async (
                 fetch(`${BASE_URL}/recording?query=${encodedQuery}&limit=${limit}&offset=${offset}&fmt=json`, { headers: getHeaders() })
                 .then(res => res.json())
                 .then(data => {
-                     songs = (data.recordings || []).map((rec: any) => ({
-                        mbid: rec.id,
-                        title: rec.title,
-                        artist: rec['artist-credit']?.[0]?.name || 'Unknown',
-                        album: rec['releases']?.[0]?.title || 'Single',
-                        year: rec['first-release-date']?.substring(0, 4) || '',
-                        type: 'song',
-                        coverUrl: null
-                    }));
+                     songs = (data.recordings || []).map((rec: any) => {
+                        // Attempt to find a release ID to get artwork
+                        const releaseMbid = rec.releases?.[0]?.id;
+                        const coverUrl = releaseMbid 
+                            ? `${COVER_ART_BASE}/release/${releaseMbid}/front-250`
+                            : null;
+
+                        return {
+                            mbid: rec.id,
+                            title: rec.title,
+                            artist: rec['artist-credit']?.[0]?.name || 'Unknown',
+                            album: rec['releases']?.[0]?.title || 'Single',
+                            year: rec['first-release-date']?.substring(0, 4) || '',
+                            type: 'song',
+                            coverUrl: coverUrl
+                        };
+                    });
                 })
             );
         }
@@ -82,7 +90,8 @@ export const searchGlobalCatalog = async (
                         artist: rel['artist-credit']?.[0]?.name || 'Unknown',
                         year: rel.date?.substring(0, 4) || '',
                         type: 'album',
-                        coverUrl: null
+                        // Albums have direct cover art mapping
+                        coverUrl: `${COVER_ART_BASE}/release/${rel.id}/front-250`
                     }));
                 })
             );
@@ -100,7 +109,7 @@ export const searchGlobalCatalog = async (
                         artist: art.area?.name || art.country || 'Artist',
                         year: art['life-span']?.begin?.substring(0, 4) || '',
                         type: 'artist',
-                        coverUrl: null
+                        coverUrl: null // Artists rarely have direct covers in this API
                     }));
                 })
             );

@@ -1,5 +1,5 @@
 
-import { SocialPost, Bounty, Track } from '../types';
+import { SocialPost, Bounty, Track, ListenParty } from '../types';
 
 // Declare global Gun types since we load via script tag
 declare global {
@@ -157,4 +157,60 @@ export const createBounty = async (mbid: string | undefined, query: string, rewa
     };
 
     db.get('bitbeats').get('v1').get('bounties').set(bounty);
+};
+
+// --- LISTEN PARTIES ---
+
+export const subscribeToParties = (callback: (party: ListenParty) => void) => {
+    const db = getGun();
+    if (!db) return;
+
+    db.get('bitbeats').get('v1').get('parties').map().on((data: any, id: string) => {
+        if(data && data.host) {
+            callback({
+                id: id,
+                host: data.host,
+                currentTrackId: data.currentTrackId,
+                timestamp: data.timestamp,
+                participants: data.participants || 1,
+                status: data.status || 'PLAYING'
+            });
+        }
+    });
+};
+
+export const createParty = async (host: string, currentTrackId: string) => {
+    const db = getGun();
+    const partyId = 'lp_' + Math.random().toString(36).substr(2, 9);
+    
+    db.get('bitbeats').get('v1').get('parties').get(partyId).put({
+        host,
+        currentTrackId,
+        timestamp: Date.now(),
+        participants: 1,
+        status: 'PLAYING'
+    });
+};
+
+// --- USER CREDITS ---
+
+export const subscribeToCredits = (pubKey: string, callback: (credits: number) => void) => {
+    const db = getGun();
+    // In a real decentralized app, this would query a ledger. 
+    // For PoC, we query the user's public profile node.
+    db.user(pubKey).get('credits').on((data: any) => {
+        // Default to 100 if undefined
+        const val = typeof data === 'number' ? data : 100;
+        callback(val);
+    });
+};
+
+export const updateUserCredits = (amount: number) => {
+    const db = getGun();
+    const user = db.user();
+    if (!user.is) return;
+    
+    // Note: Insecure for real money. Client can manipulate. 
+    // Requires Consensus/Smart Contract for real security.
+    user.get('credits').put(amount);
 };
