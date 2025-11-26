@@ -6,7 +6,7 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 export default defineConfig({
   plugins: [
     react(),
-    // Copy WASM to dist root so dynamic import('fpcalc-browser') can find it
+    // Copy fpcalc.wasm to the server root so fpcalc-browser can fetch "/fpcalc.wasm"
     viteStaticCopy({
       targets: [
         { src: 'node_modules/fpcalc-browser/dist/fpcalc.wasm', dest: '.' }
@@ -23,9 +23,7 @@ export default defineConfig({
     }
   },
   server: {
-    host: true,
-    // Ensure correct MIME for wasm (usually handled by Vite, kept here for safety)
-    // Vite serves .wasm as application/wasm; no extra config typically needed.
+    host: true
   },
   // Specific config for WASM libraries like fpcalc-browser or chromaprint-js
   assetsInclude: ['**/*.wasm'],
