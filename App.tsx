@@ -26,7 +26,6 @@ import { UploadZone } from './components/UploadZone';
 import { MetadataResolver } from './components/MetadataResolver';
 import { ArtistPage } from './pages/ArtistPage';
 import { AlbumPage } from './pages/AlbumPage';
-import { MOCK_ALBUMS } from './services/mockCatalog';
 
 // --- Components ---
 
@@ -293,14 +292,6 @@ function App() {
        setActivePeers(peers);
        
        setLibrary(initialLibrary);
-
-       // Inject Mock Tracks for new Demo Pages
-       setTracks(prev => {
-         const mockTracks = MOCK_ALBUMS.flatMap(a => a.tracks) as Track[];
-         // Filter out duplicates
-         const newMocks = mockTracks.filter(m => !prev.find(p => p.id === m.id));
-         return [...newMocks, ...prev];
-       });
     };
     init();
 
@@ -727,10 +718,10 @@ function App() {
                 } />
 
                 {/* --- ARTIST DETAILS (NEW) --- */}
-                <Route path="/artist/:id" element={<ArtistPage onPlay={handlePlay} />} />
+                <Route path="/artist/:id" element={<ArtistPage onPlay={handlePlay} swarmTracks={tracks} />} />
                 
                 {/* --- ALBUM DETAILS (NEW) --- */}
-                <Route path="/album/:id" element={<AlbumPage onPlay={handlePlay} isPlaying={isPlaying} currentTrackId={currentTrack?.id} />} />
+                <Route path="/album/:id" element={<AlbumPage onPlay={handlePlay} isPlaying={isPlaying} currentTrackId={currentTrack?.id} swarmTracks={tracks} />} />
 
                 {/* --- SEARCH RESULTS --- */}
                 <Route path="/search" element={

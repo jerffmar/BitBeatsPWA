@@ -37,6 +37,34 @@ export interface DetailedMetadata {
     tags: string[];
 }
 
+export interface MBArtist {
+    id: string;
+    name: string;
+    country: string;
+    tags: string[];
+    disambiguation: string;
+}
+
+export interface MBRelease {
+    id: string;
+    title: string;
+    date: string;
+    artist: string;
+    coverUrl: string;
+    type: string;
+}
+
+export interface MBReleaseDetail extends MBRelease {
+    tracks: {
+        id: string;
+        title: string;
+        artist: string;
+        duration: number; // seconds
+        position: number;
+    }[];
+    about?: string;
+}
+
 const getHeaders = () => ({
     'Accept': 'application/json',
     'User-Agent': USER_AGENT
@@ -231,6 +259,103 @@ export const lookupRecording = async (mbid: string): Promise<DetailedMetadata | 
 
     } catch (err) {
         console.error("Metadata Lookup Failed:", err);
+        return null;
+    }
+};
+
+
+export const lookupArtist = async (mbid: string): Promise<MBArtist | null> => {
+    try {
+        const url = `${BASE_URL}/artist/${mbid}?inc=tags+ratings&fmt=json`;
+        const res = await fetch(url, { headers: getHeaders() });
+        if(!res.ok) return null;
+        const data = await res.json();
+        return {
+            id: data.id,
+            name: data.name,
+            country: data.area?.name || data.country || '',
+            tags: (data.tags || []).sort((a:any,b:any) => b.count - a.count).map((t: any) => t.name).slice(0, 5),
+            disambiguation: data.disambiguation || ''
+        };
+    } catch {
+        return null;
+    }
+};
+
+export const getArtistDiscography = async (artistMbid: string): Promise<MBRelease[]> => {
+    try {
+        // Fetch Release Groups (Distinct Albums)
+        const url = `${BASE_URL}/release-group?artist=${artistMbid}&type=album&limit=20&fmt=json`;
+        const res = await fetch(url, { headers: getHeaders() });
+        if(!res.ok) return [];
+        const data = await res.json();
+        
+        return (data['release-groups'] || []).map((rg: any) => ({
+            id: rg.id, // Release Group ID
+            title: rg.title,
+            date: rg['first-release-date']?.substring(0, 4) || '',
+            artist: '', 
+            coverUrl: `https://coverartarchive.org/release-group/${rg.id}/front-250`,
+            type: 'album'
+        }));
+    } catch {
+        return [];
+    }
+};
+
+// Helper to resolve a Release Group ID to a specific Release ID (Official preference)
+export const resolveReleaseGroup = async (releaseGroupId: string): Promise<string | null> => {
+     try {
+        const url = `${BASE_URL}/release-group/${releaseGroupId}?inc=releases&fmt=json`;
+        const res = await fetch(url, { headers: getHeaders() });
+        const data = await res.json();
+        const releases = data.releases || [];
+        // Prefer official, then US/UK/International, or just first
+        const official = releases.find((r:any) => r.status === 'Official');
+        return official ? official.id : releases[0]?.id;
+     } catch {
+         return null;
+     }
+}
+
+export const lookupRelease = async (mbid: string): Promise<MBReleaseDetail | null> => {
+    try {
+        // First try as a standard Release ID
+        let url = `${BASE_URL}/release/${mbid}?inc=recordings+artist-credits+release-groups&fmt=json`;
+        let res = await fetch(url, { headers: getHeaders() });
+        
+        if (!res.ok && res.status === 404) {
+             // If 404, assume it might be a Release Group ID passed from Discography
+             const realId = await resolveReleaseGroup(mbid);
+             if(realId) {
+                 url = `${BASE_URL}/release/${realId}?inc=recordings+artist-credits+release-groups&fmt=json`;
+                 res = await fetch(url, { headers: getHeaders() });
+             }
+        }
+        
+        if(!res.ok) return null;
+        
+        const data = await res.json();
+        const rgId = data['release-groups']?.[0]?.id;
+        
+        return {
+            id: data.id,
+            title: data.title,
+            artist: data['artist-credit']?.[0]?.name || 'Unknown',
+            date: data.date?.substring(0,4),
+            // Prefer RG cover if available as it's often better quality/consistent
+            coverUrl: rgId ? `https://coverartarchive.org/release-group/${rgId}/front-500` : `https://coverartarchive.org/release/${data.id}/front-500`, 
+            type: 'album',
+            about: data.disambiguation,
+            tracks: (data.media?.[0]?.tracks || []).map((t: any) => ({
+                id: t.recording.id,
+                title: t.title,
+                artist: t['artist-credit']?.[0]?.name || 'Unknown',
+                duration: t.length ? t.length / 1000 : 0,
+                position: t.position
+            }))
+        };
+    } catch {
         return null;
     }
 };
