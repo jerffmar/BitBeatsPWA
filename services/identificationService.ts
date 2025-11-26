@@ -331,5 +331,51 @@ const attemptFuzzyMatch = async (file: File, fileDuration: number): Promise<Iden
     };
   }
 
+  // Last resort: read embedded tags and keep metadata as-is
+  const tagResult = await readEmbeddedTags(file);
+  if (tagResult) {
+    console.warn('ℹ️ Using embedded tags as last resort identification.');
+    return tagResult;
+  }
+
   throw new IdentificationError("No matches found using any identification method.");
+};
+
+// --- Last-Resort: Read embedded tags from file ---
+const readEmbeddedTags = async (file: File): Promise<IdentificationResult | null> => {
+  try {
+    // Dynamic import to avoid hard dependency when not installed
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    const mm = await import('music-metadata-browser');
+    const metadata = await mm.parseBlob(file);
+
+    const common = metadata?.common || {};
+    const title = common.title || file.name.replace(/\.[^/.]+$/, '');
+    const artist = (common.artists && common.artists[0]) || common.artist || 'Unknown Artist';
+    const album = common.album || 'Unknown Album';
+    const year = common.year ? String(common.year) : '';
+    const picture = (common.picture && common.picture[0]) ? common.picture[0] : null;
+    
+    // Build a data URL for embedded cover art if present
+    let coverUrl: string | undefined;
+    if (picture?.data && picture?.format) {
+      const blob = new Blob([picture.data], { type: picture.format });
+      coverUrl = URL.createObjectURL(blob);
+    }
+
+    return {
+      mbid: '', // Unknown without MB lookup
+      title,
+      artist,
+      album,
+      year,
+      coverUrl,
+      score: 0.5, // Neutral confidence
+      methodUsed: 'fuzzy', // keep pipeline consistent; visually it will show fallback result
+      duration: 0
+    };
+  } catch {
+    return null;
+  }
 };
