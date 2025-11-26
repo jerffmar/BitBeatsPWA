@@ -5,7 +5,7 @@ import {
   Wifi, HardDrive, Share2, Download, Radio, Volume2, User, 
   Disc, Users, Zap, Shield, Mic2, Settings, Trash2, Heart,
   Globe, Activity, LogOut, Send, MessageSquare, Check, X, FileAudio,
-  Database, AlertCircle, Music, Layers, Mic, Tag
+  Database, AlertCircle, Music, Layers, Mic, Tag, ArrowDown, Loader
 } from 'lucide-react';
 
 import { Track, LibraryEntry, UserStats, ViewState, StorageConfig, User as UserType, SocialPost, GlobalCatalogEntry, Bounty } from './types';
@@ -143,6 +143,7 @@ function App() {
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [searchFilter, setSearchFilter] = useState<'ALL' | 'SONG' | 'ALBUM' | 'ARTIST'>('ALL');
   const [searchResults, setSearchResults] = useState<{
       available: Track[],
@@ -282,7 +283,8 @@ function App() {
       setSearchFilter('ALL');
 
       // 1. Search Global Catalog (MusicBrainz)
-      const catalogResults = await searchGlobalCatalog(searchQuery);
+      // Call with defaults: offset=0, filter='ALL'
+      const catalogResults = await searchGlobalCatalog(searchQuery, 0, 'ALL');
 
       // 2. Cross-reference with Real Inventory (Gun.js Tracks)
       const localMatches: Track[] = [];
@@ -308,6 +310,32 @@ function App() {
           catalog: catalogResults
       });
       setIsSearching(false);
+  };
+
+  const handleLoadMore = async () => {
+      if (isLoadingMore || searchFilter === 'ALL') return;
+      setIsLoadingMore(true);
+
+      // Determine current offset based on selected filter
+      let offset = 0;
+      if (searchFilter === 'SONG') offset = searchResults.catalog.songs.length;
+      if (searchFilter === 'ALBUM') offset = searchResults.catalog.albums.length;
+      if (searchFilter === 'ARTIST') offset = searchResults.catalog.artists.length;
+
+      // Fetch next page
+      const moreResults = await searchGlobalCatalog(searchQuery, offset, searchFilter);
+
+      // Append results
+      setSearchResults(prev => ({
+          ...prev,
+          catalog: {
+              songs: searchFilter === 'SONG' ? [...prev.catalog.songs, ...moreResults.songs] : prev.catalog.songs,
+              albums: searchFilter === 'ALBUM' ? [...prev.catalog.albums, ...moreResults.albums] : prev.catalog.albums,
+              artists: searchFilter === 'ARTIST' ? [...prev.catalog.artists, ...moreResults.artists] : prev.catalog.artists,
+          }
+      }));
+
+      setIsLoadingMore(false);
   };
 
   const handleRequestBounty = (item: GlobalCatalogEntry) => {
@@ -714,6 +742,21 @@ function App() {
                             </div>
                              {searchResults.catalog.artists.length === 0 && <p className="text-gray-500 italic text-sm">No artists found in global catalog.</p>}
                          </div>
+                       )}
+
+                       {/* LOAD MORE BUTTON */}
+                       {searchFilter !== 'ALL' && (
+                           <div className="mt-12 flex justify-center">
+                               <Button 
+                                   variant="secondary" 
+                                   onClick={handleLoadMore} 
+                                   disabled={isLoadingMore}
+                                   className="min-w-[200px]"
+                               >
+                                   {isLoadingMore ? <Loader className="animate-spin" size={16} /> : <ArrowDown size={16} />}
+                                   Load More Results
+                               </Button>
+                           </div>
                        )}
 
                    </div>

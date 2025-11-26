@@ -33,52 +33,80 @@ const getHeaders = () => ({
 
 // --- SEARCH ---
 
-export const searchGlobalCatalog = async (query: string): Promise<SearchResults> => {
+export const searchGlobalCatalog = async (
+    query: string, 
+    offset: number = 0, 
+    filter: 'ALL' | 'SONG' | 'ALBUM' | 'ARTIST' = 'ALL'
+): Promise<SearchResults> => {
     if (!query) return { songs: [], albums: [], artists: [] };
 
     const encodedQuery = encodeURIComponent(query);
+    const limit = 20; // Page size
+
+    // We initialize with empty arrays
+    let songs: GlobalCatalogEntry[] = [];
+    let albums: GlobalCatalogEntry[] = [];
+    let artists: GlobalCatalogEntry[] = [];
 
     try {
-        const [songsRes, albumsRes, artistsRes] = await Promise.all([
-            fetch(`${BASE_URL}/recording?query=${encodedQuery}&limit=10&fmt=json`, { headers: getHeaders() }),
-            fetch(`${BASE_URL}/release?query=${encodedQuery}&limit=10&fmt=json`, { headers: getHeaders() }),
-            fetch(`${BASE_URL}/artist?query=${encodedQuery}&limit=10&fmt=json`, { headers: getHeaders() })
-        ]);
+        const promises = [];
 
-        const songsData = await songsRes.json();
-        const albumsData = await albumsRes.json();
-        const artistsData = await artistsRes.json();
+        // 1. Fetch Recordings (Songs)
+        if (filter === 'ALL' || filter === 'SONG') {
+            promises.push(
+                fetch(`${BASE_URL}/recording?query=${encodedQuery}&limit=${limit}&offset=${offset}&fmt=json`, { headers: getHeaders() })
+                .then(res => res.json())
+                .then(data => {
+                     songs = (data.recordings || []).map((rec: any) => ({
+                        mbid: rec.id,
+                        title: rec.title,
+                        artist: rec['artist-credit']?.[0]?.name || 'Unknown',
+                        album: rec['releases']?.[0]?.title || 'Single',
+                        year: rec['first-release-date']?.substring(0, 4) || '',
+                        type: 'song',
+                        coverUrl: null
+                    }));
+                })
+            );
+        }
 
-        // Process Songs
-        const songs: GlobalCatalogEntry[] = (songsData.recordings || []).map((rec: any) => ({
-            mbid: rec.id,
-            title: rec.title,
-            artist: rec['artist-credit']?.[0]?.name || 'Unknown',
-            album: rec['releases']?.[0]?.title || 'Single',
-            year: rec['first-release-date']?.substring(0, 4) || '',
-            type: 'song',
-            coverUrl: null
-        }));
+        // 2. Fetch Releases (Albums)
+        if (filter === 'ALL' || filter === 'ALBUM') {
+            promises.push(
+                fetch(`${BASE_URL}/release?query=${encodedQuery}&limit=${limit}&offset=${offset}&fmt=json`, { headers: getHeaders() })
+                .then(res => res.json())
+                .then(data => {
+                    albums = (data.releases || []).map((rel: any) => ({
+                        mbid: rel.id,
+                        title: rel.title,
+                        artist: rel['artist-credit']?.[0]?.name || 'Unknown',
+                        year: rel.date?.substring(0, 4) || '',
+                        type: 'album',
+                        coverUrl: null
+                    }));
+                })
+            );
+        }
 
-        // Process Albums
-        const albums: GlobalCatalogEntry[] = (albumsData.releases || []).map((rel: any) => ({
-            mbid: rel.id,
-            title: rel.title,
-            artist: rel['artist-credit']?.[0]?.name || 'Unknown',
-            year: rel.date?.substring(0, 4) || '',
-            type: 'album',
-            coverUrl: null
-        }));
+        // 3. Fetch Artists
+        if (filter === 'ALL' || filter === 'ARTIST') {
+            promises.push(
+                fetch(`${BASE_URL}/artist?query=${encodedQuery}&limit=${limit}&offset=${offset}&fmt=json`, { headers: getHeaders() })
+                .then(res => res.json())
+                .then(data => {
+                    artists = (data.artists || []).map((art: any) => ({
+                        mbid: art.id,
+                        title: art.name,
+                        artist: art.area?.name || art.country || 'Artist',
+                        year: art['life-span']?.begin?.substring(0, 4) || '',
+                        type: 'artist',
+                        coverUrl: null
+                    }));
+                })
+            );
+        }
 
-        // Process Artists
-        const artists: GlobalCatalogEntry[] = (artistsData.artists || []).map((art: any) => ({
-            mbid: art.id,
-            title: art.name,
-            artist: art.area?.name || art.country || 'Artist',
-            year: art['life-span']?.begin?.substring(0, 4) || '',
-            type: 'artist',
-            coverUrl: null
-        }));
+        await Promise.all(promises);
 
         return { songs, albums, artists };
 
