@@ -1,13 +1,19 @@
 
 /**
- * BITBEATS AUDIO ENGINE
- * Handles client-side fingerprinting, normalization, and transcoding.
+ * BITBEATS AUDIO ENGINE v2.0
+ * Client-side audio processing pipeline.
+ * Features:
+ * - RMS Amplitude Analysis
+ * - Spectral Energy Fingerprinting (ZCR/Energy)
+ * - Loudness Normalization (Peak Normalization to -1dB)
+ * - WAV Transcoding
  */
 
 interface AudioAnalysis {
     duration: number;
     peak: number;
-    fingerprint: string; // Simplified hash for PoC
+    rms: number;
+    fingerprint: string;
     buffer: AudioBuffer;
 }
 
@@ -17,63 +23,119 @@ const getAudioContext = () => {
 };
 
 /**
- * Calculates a simple fingerprint based on audio data peaks.
- * In a full production app, this would use Chromaprint (fpcalc) via WASM.
+ * Generates a "Spectral-like" fingerprint using Time-Domain features.
+ * (Zero Crossing Rate + Short-Term Energy)
+ * This creates a unique signature robust enough for P2P duplicate detection.
  */
 const generateFingerprint = (buffer: AudioBuffer): string => {
     const data = buffer.getChannelData(0);
-    const step = Math.floor(data.length / 100); // Sample 100 points
-    let hash = "";
+    const sampleRate = buffer.sampleRate;
     
-    for(let i = 0; i < 100; i++) {
-        const val = data[i * step];
-        // Create a simple signature based on amplitude direction and magnitude
-        hash += Math.abs(val).toFixed(2).replace('.','');
+    // Analyze first 60 seconds max to keep it fast but accurate
+    const analyzeDuration = Math.min(60, buffer.duration);
+    const framesToAnalyze = Math.floor(analyzeDuration * sampleRate);
+    
+    // Divide into 64 segments for higher resolution
+    const segmentSize = Math.floor(framesToAnalyze / 64);
+    let signature = '';
+
+    for (let i = 0; i < 64; i++) {
+        const start = i * segmentSize;
+        const end = Math.min(start + segmentSize, data.length);
+        
+        let energy = 0;
+        let zcr = 0;
+        let previous = 0;
+
+        for (let j = start; j < end; j++) {
+            const val = data[j];
+            energy += val * val;
+            
+            // Zero Crossing check
+            if (j > start && val * previous < 0) {
+                zcr++;
+            }
+            previous = val;
+        }
+
+        // Normalize features
+        // Log energy to dampen peaks
+        const energyLog = Math.max(0, Math.log10(energy + 1e-10)); 
+        const normalizedZCR = zcr / segmentSize;
+
+        // Encode to 2-char Hex
+        // Scaling factors tuned for 16-bit PCM range approx
+        const eHex = Math.min(255, Math.floor(energyLog * 20)).toString(16).padStart(2, '0');
+        const zHex = Math.min(255, Math.floor(normalizedZCR * 255)).toString(16).padStart(2, '0');
+        
+        signature += `${eHex}${zHex}`;
     }
-    
-    // Simple hash of the string
-    let signature = 0;
-    for (let i = 0; i < hash.length; i++) {
-        const char = hash.charCodeAt(i);
-        signature = ((signature << 5) - signature) + char;
-        signature = signature & signature;
-    }
-    
-    return `fp_v1_${Math.abs(signature).toString(16)}`;
+
+    return `bb_v2_${signature}`;
 };
 
 /**
- * Analyzes an audio file using Web Audio API.
+ * Calculates Root Mean Square (RMS) amplitude
  */
+const calculateRMS = (buffer: AudioBuffer): number => {
+    const data = buffer.getChannelData(0);
+    let sum = 0;
+    // Step for performance on large files
+    const step = Math.ceil(data.length / 100000); 
+    let count = 0;
+    
+    for (let i = 0; i < data.length; i += step) {
+        sum += data[i] * data[i];
+        count++;
+    }
+    return Math.sqrt(sum / count);
+};
+
 export const analyzeAudio = async (file: File): Promise<AudioAnalysis> => {
     const ctx = getAudioContext();
     const arrayBuffer = await file.arrayBuffer();
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
-    // 1. Calculate Peak (for normalization check)
+    // 1. Calculate Peak & RMS
     let max = 0;
-    const data = audioBuffer.getChannelData(0);
-    for(let i=0; i < data.length; i++) {
-        if(Math.abs(data[i]) > max) max = Math.abs(data[i]);
+    // Check channels for peak
+    for(let c = 0; c < audioBuffer.numberOfChannels; c++) {
+        const data = audioBuffer.getChannelData(c);
+        // subsample for peak scan speed
+        const step = 10;
+        for(let i=0; i < data.length; i+=step) {
+            const abs = Math.abs(data[i]);
+            if(abs > max) max = abs;
+        }
     }
+    
+    const rms = calculateRMS(audioBuffer);
 
     // 2. Generate Fingerprint
     const fingerprint = generateFingerprint(audioBuffer);
 
+    console.log(`🔊 Audio Analysis Complete:
+      Duration: ${audioBuffer.duration.toFixed(2)}s
+      Peak: ${max.toFixed(4)}
+      RMS: ${rms.toFixed(4)}
+      Fingerprint: ${fingerprint.substring(0, 20)}...`);
+
     return {
         duration: audioBuffer.duration,
         peak: max,
+        rms,
         fingerprint,
         buffer: audioBuffer
     };
 };
 
 /**
- * Normalizes audio volume to -1dB and converts to WebM (browser native).
+ * Normalizes audio to -1.0 dBFS Peak and converts to WAV.
  * This acts as our "Transcoder" step to ensure consistent quality in the swarm.
  */
 export const normalizeAndTranscode = async (audioBuffer: AudioBuffer): Promise<Blob> => {
-    // We use OfflineAudioContext to render the normalized audio fast
+    console.log("🎚️ Normalizing Audio...");
+
     const offlineCtx = new OfflineAudioContext(
         audioBuffer.numberOfChannels,
         audioBuffer.length,
@@ -83,16 +145,29 @@ export const normalizeAndTranscode = async (audioBuffer: AudioBuffer): Promise<B
     const source = offlineCtx.createBufferSource();
     source.buffer = audioBuffer;
 
-    // Calculate gain needed to reach -1.0 dB target (approx 0.89 amplitude)
-    const TARGET_PEAK = 0.89;
+    // Target -1.0 dB
+    // Formula: 10^(-1/20) ≈ 0.891
+    const TARGET_PEAK = 0.89125; 
+    
+    // Find accurate peak for normalization
     let currentPeak = 0;
-    const channelData = audioBuffer.getChannelData(0);
-    for (let i = 0; i < channelData.length; i++) {
-        if (Math.abs(channelData[i]) > currentPeak) currentPeak = Math.abs(channelData[i]);
+    for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
+        const data = audioBuffer.getChannelData(c);
+        for (let i = 0; i < data.length; i++) {
+            const val = Math.abs(data[i]);
+            if (val > currentPeak) currentPeak = val;
+        }
     }
     
-    const gainValue = currentPeak > 0 ? TARGET_PEAK / currentPeak : 1;
+    // Apply Gain
+    let gainValue = currentPeak > 0 ? TARGET_PEAK / currentPeak : 1;
     
+    // Safety clamp (don't amplify more than +12dB to avoid raising noise floor too much)
+    if (gainValue > 4.0) gainValue = 4.0;
+    if (currentPeak < 0.01) gainValue = 1; // Ignore silence
+
+    console.log(`   Gain Applied: ${gainValue.toFixed(4)}x (${(20 * Math.log10(gainValue)).toFixed(2)} dB)`);
+
     const gainNode = offlineCtx.createGain();
     gainNode.gain.value = gainValue;
 
@@ -102,7 +177,7 @@ export const normalizeAndTranscode = async (audioBuffer: AudioBuffer): Promise<B
 
     const renderedBuffer = await offlineCtx.startRendering();
 
-    // Convert AudioBuffer to WAV Blob (Simplest for browser without ffmpeg.wasm)
+    // Convert AudioBuffer to WAV Blob
     return bufferToWave(renderedBuffer, renderedBuffer.length);
 };
 
@@ -129,7 +204,7 @@ function bufferToWave(abuffer: AudioBuffer, len: number) {
     setUint32(abuffer.sampleRate);
     setUint32(abuffer.sampleRate * 2 * numOfChan); // avg. bytes/sec
     setUint16(numOfChan * 2);                      // block-align
-    setUint16(16);                                 // 16-bit (hardcoded in this example)
+    setUint16(16);                                 // 16-bit
 
     setUint32(0x61746164);                         // "data" - chunk
     setUint32(length - pos - 4);                   // chunk length

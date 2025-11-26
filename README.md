@@ -18,12 +18,18 @@ BitBeats is a Proof-of-Concept (PoC) Progressive Web App (PWA) demonstrating a d
 - **Bounty Board:** Users can spend earned credits to request rare tracks. Seeders who fulfill requests earn the bounty.
 - **Network Health:** Visual indicators showing how "rare" or "common" a track is in the swarm.
 
-### 3. Social Swarm (Powered by Gun.js)
+### 3. Smart Metadata Matching (New)
+- **Hybrid Identification Flow:** Combines Client-Side Fingerprinting (`fpcalc-browser`) with a robust fuzzy matcher fallback.
+- **Algorithm:** Uses **Levenshtein Distance** to fuzzy match filenames against the **MusicBrainz** global database.
+- **Weighted Scoring:** Calculates confidence scores based on Title (40%), Artist (30%), and Duration (30%) similarity.
+- **Real-time Lookup:** Fetches metadata directly from MusicBrainz API (Lucene) and AcoustID without relying on static mocks.
+
+### 4. Social Swarm (Powered by Gun.js)
 - **Decentralized Chat:** Swarm Chatter is now powered by **Gun.js**, a distributed graph database. Messages are propagated peer-to-peer without a central API server.
 - **Listen Parties:** Synchronized playback rooms powered by real-time graph updates.
 - **LAN Sync:** Discovery of peers on the local network mesh to save internet bandwidth.
 
-### 4. Creator Studio
+### 5. Creator Studio
 - **Audio Processing Engine:** Client-side analysis and normalization.
 - **Fingerprinting:** Unique content IDs generated from audio data to prevent duplicates.
 - **Normalization:** Audio is automatically normalized to -1dB before seeding.
@@ -33,40 +39,7 @@ BitBeats is a Proof-of-Concept (PoC) Progressive Web App (PWA) demonstrating a d
 - **Styling:** Tailwind CSS (Dark Mode optimized)
 - **Storage:** Native File System Access API (OPFS)
 - **Networking:** Gun.js (Decentralized DB), WebTorrent (WebRTC P2P)
-- **Audio Engine:** Web Audio API (OfflineAudioContext)
-
-
-## How BitBeats gets info from MusicBrainz
-
-BitBeats identifies and enriches track metadata using two complementary flows:
-
-- Client-Side Search (Lucene):
-  - The app queries MusicBrainz’s search endpoints using fuzzy matching:
-    - `GET https://musicbrainz.org/ws/2/recording?query={title} AND artist:{artist} AND dur:{seconds}&fmt=json`
-    - `GET https://musicbrainz.org/ws/2/artist?query={artist}&fmt=json`
-  - Results are scored using Levenshtein Distance with weighted fields (Title 40%, Artist 30%, Duration 30%).
-  - The best match yields candidate recording/artist IDs used for enrichment.
-
-- Backend Recording Lookup + Cover Art (if backend caching layer is enabled):
-  - Given a MusicBrainz recording ID (from AcoustID or search), the backend requests:
-    - `GET https://musicbrainz.org/ws/2/recording/{mbid}?fmt=json&inc=releases+artists+tags`
-    - Required header: `User-Agent: BitBeats/1.0 (contact@bitbeats.app)`
-  - Cover art is fetched via Cover Art Archive:
-    - `GET https://coverartarchive.org/release/{releaseId}`
-  - Persisted fields:
-    - Artist: `id (mbid)`, `name`, `tags`
-    - Album (Release): `id (mbid)`, `title`, `date`, `coverUrl`
-    - Track (Recording): `id (mbid)`, `title`, `length (ms -> sec)`
-  - Rate limit considerations:
-    - MusicBrainz enforces polite usage; requests include a clear User-Agent and may be throttled.
-    - The backend uses a read-through cache: DB is checked first; external APIs are only called on misses.
-
-Typical flow:
-1. Fingerprint → AcoustID returns recording ID.
-2. Recording ID → MusicBrainz recording lookup (+ releases, artists, tags).
-3. Release ID → Cover Art Archive for artwork.
-4. Data is cached locally (Artist → Album → Track) to avoid repeated API calls.
-
+- **Metadata:** MusicBrainz API, Levenshtein Algorithm
 
 ## 🚀 Roadmap & To-Do Goals
 
@@ -81,6 +54,7 @@ Typical flow:
 - [x] **Streaming Optimization:** Updated playback engine to stream directly from Torrent blobs or OPFS blobs.
 
 ### Phase 3: De-Mocking & Real Implementation (Completed)
+- [x] **Smart Metadata Matcher:** Implemented robust file identification using MusicBrainz and fuzzy string matching (`services/metadataMatcher.ts`), replacing mock fingerprinting services.
 - [x] **Remove `MOCK_TRACKS`:** Populated Discovery view entirely from DHT/Tracker infoHashes and MusicBrainz cross-referencing.
 - [x] **Remove Auth Mocks:** Replaced `services/auth.ts` (localStorage simulation) with **Gun.js SEA** (User.auth) for true cryptographic identity.
 - [x] **Remove `MOCK_BOUNTIES`:** Implemented a real decentralized ledger in Gun.js for creating and fulfilling bounties.
@@ -88,7 +62,7 @@ Typical flow:
 - [x] **Remove `MOCK_POSTS`:** Ensured the social feed pulls 100% of history from the mesh network.
 - [x] **Remove `discoverLocalPeers`:** Implemented actual Mesh peer discovery using Gun.js internal peer list.
 - [x] **Remove `signUpload`:** Replaced simulated delay with actual Ed25519 content signing logic using `Gun.SEA`.
-- [x] **Remove Mock Credits:** Implemented a basic graph node for tracking User Credits.
+- [x] **Remove Identification Mocks:** Replaced simulated AcoustID checks with real API calls and fallback fuzzy logic (`services/identificationService.ts`).
 
 ### Phase 4: Platform (Future)
 - [ ] **Mobile Wrapper:** Wrap using Capacitor or Trusted Web Activities (TWA) to enable background audio support on iOS/Android.
@@ -101,6 +75,8 @@ Typical flow:
 npm install
 npm run dev
 ```
+
+**Note:** The `fpcalc-browser` package requires WASM support. Ensure your dev server serves `.wasm` files with the correct MIME type.
 
 ## 📄 License
 MIT

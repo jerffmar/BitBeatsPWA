@@ -508,14 +508,20 @@ function App() {
 
   const handleIdentifiedUpload = async (file: File, metadata: DetailedMetadata) => {
       if (!user) return;
-      setUploadStatus('Initializing Swarm...');
+      setUploadStatus('Initializing Phase 2 Engine...');
       
       try {
           const analysis = await analyzeAudio(file);
-          setUploadStatus('Cryptographic Signing...');
-          const signature = await signUpload(file, `hash_${analysis.fingerprint}`);
+          
+          setUploadStatus('Normalizing Audio (-1dB)...');
+          const processedBlob = await normalizeAndTranscode(analysis.buffer);
+          const processedFile = new File([processedBlob], `${metadata.artist} - ${metadata.title}.wav`, { type: 'audio/wav' });
 
-          const magnet = await seedFile(file, `[BitBeats] ${metadata.artist} - ${metadata.title}`);
+          setUploadStatus('Cryptographic Signing...');
+          const signature = await signUpload(processedFile, `hash_${analysis.fingerprint}`);
+
+          setUploadStatus('Seeding to DHT...');
+          const magnet = await seedFile(processedFile, `[BitBeats] ${metadata.artist} - ${metadata.title}`);
           
           setUploadStatus(`Seeding Active! Magnet: ${magnet.substring(0, 20)}...`);
           
@@ -528,7 +534,7 @@ function App() {
               duration: analysis.duration,
               audioUrl: magnet,
               license: 'CC-BY',
-              size: file.size / 1024 / 1024,
+              size: processedFile.size / 1024 / 1024,
               tags: metadata.tags || ['p2p', 'upload'],
               bpm: 120, 
               networkHealth: 100,
@@ -536,7 +542,7 @@ function App() {
           };
 
           await publishTrackMetadata(newTrack);
-          alert("Track published to the P2P Network!");
+          alert("Track processed and published to the P2P Network!");
           navigate('/library');
           setUploadStatus('');
 
