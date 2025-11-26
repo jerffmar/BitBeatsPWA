@@ -26,7 +26,10 @@ export default defineConfig(async () => {
       target: 'esnext', // Required for Top-level await and advanced Storage APIs
       sourcemap: false,
       rollupOptions: {
-        external: ['fpcalc-browser']
+        external: [
+          'fpcalc-browser',
+          'music-metadata-browser' // externalize dynamic import to prevent Rollup resolution errors
+        ]
       }
     },
     server: {
