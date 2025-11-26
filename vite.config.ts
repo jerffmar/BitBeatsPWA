@@ -1,3 +1,4 @@
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -12,5 +13,10 @@ export default defineConfig({
   },
   server: {
     host: true
+  },
+  // Specific config for WASM libraries like fpcalc-browser or chromaprint-js
+  assetsInclude: ['**/*.wasm'],
+  optimizeDeps: {
+    exclude: ['fpcalc-browser'] // Prevent Vite from pre-bundling the WASM wrapper
   }
 });
