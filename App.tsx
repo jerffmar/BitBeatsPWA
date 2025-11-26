@@ -22,8 +22,6 @@ import { searchGlobalCatalog, SearchResults, DetailedMetadata } from './services
 import { identifyTrack } from './services/identification';
 import { AuthScreen } from './AuthScreen';
 import { getSession, logout } from './services/auth';
-import { UploadZone } from './components/UploadZone';
-import { MetadataResolver } from './components/MetadataResolver';
 import { ArtistPage } from './pages/ArtistPage';
 import { AlbumPage } from './pages/AlbumPage';
 import { LibraryDashboard } from './pages/LibraryDashboard';
