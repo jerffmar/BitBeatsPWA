@@ -25,6 +25,7 @@ import { getSession, logout } from './services/auth';
 import { ArtistPage } from './pages/ArtistPage';
 import { AlbumPage } from './pages/AlbumPage';
 import { LibraryDashboard } from './pages/LibraryDashboard';
+import { DiscoveryPage } from './pages/DiscoveryPage';
 
 // --- Components ---
 
@@ -419,7 +420,7 @@ function App() {
         setLibrary(prev => {
             const entry = prev[track.id];
             if (entry) return { ...prev, [track.id]: { ...entry, lastPlayed: Date.now() }};
-            return prev;
+            return { ...prev, [track.id]: { trackId: track.id, status: 'REMOTE', progress: 0, lastPlayed: Date.now(), addedAt: Date.now() }};
         });
 
         const audio = audioRef.current;
@@ -604,47 +605,12 @@ function App() {
             <Routes>
                 {/* --- DISCOVERY --- */}
                 <Route path="/" element={
-                     <div className="p-8 max-w-6xl mx-auto">
-                        <div className="flex justify-between items-end mb-8">
-                            <div>
-                                <h1 className="text-4xl font-bold text-white mb-2">Discover</h1>
-                                <p className="text-gray-400">P2P Network Content.</p>
-                            </div>
-                            <div className="text-right">
-                                <span className="text-xs text-brand-500 bg-brand-500/10 border border-brand-500/20 px-2 py-1 rounded">DECENTRALIZED</span>
-                                <p className="text-sm text-gray-500 mt-1">Files streamed directly from peers.</p>
-                            </div>
-                        </div>
-
-                        {tracks.length === 0 ? (
-                            <div className="text-center py-20 text-gray-500">
-                                <div className="mb-4 text-4xl">🕸️</div>
-                                <p>Waiting for peers...</p>
-                                <p className="text-sm">Be the first to seed content in your Library!</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                            {tracks.map(track => (
-                                <div key={track.id} className="group cursor-pointer" onClick={() => handlePlay(track)}>
-                                    <div className="aspect-square rounded-xl overflow-hidden mb-3 relative shadow-2xl bg-gray-800">
-                                        <img src={track.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                                        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-white flex items-center gap-1">
-                                            <Activity size={10} className={track.networkHealth > 80 ? "text-green-400" : "text-red-400"} />
-                                            {track.networkHealth}% Avail
-                                        </div>
-                                        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                                        <div className="bg-white text-black rounded-full p-3 opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all shadow-xl">
-                                            <Play size={24} fill="currentColor" />
-                                        </div>
-                                        </div>
-                                    </div>
-                                    <h3 className="font-bold text-white truncate">{track.title}</h3>
-                                    <p className="text-sm text-gray-500 truncate">{track.artist}</p>
-                                </div>
-                            ))}
-                            </div>
-                        )}
-                     </div>
+                     <DiscoveryPage 
+                        library={library} 
+                        tracks={tracks} 
+                        onPlay={handlePlay} 
+                        user={user} 
+                     />
                 } />
 
                 {/* --- ARTIST DETAILS --- */}
