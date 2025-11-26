@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "npx serve -s dist -l $PORT",
-    "render-deploy": "npm install && npm run build"
+    "render-deploy": "npm install && npm run build",
+    "cleanup": "rm -f index-1.html index-1.tsx README-1.md render-1.yaml trackers-1.txt types-1.ts vite,config-1.ts"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",
