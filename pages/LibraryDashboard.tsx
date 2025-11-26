@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -32,6 +31,60 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
   const [likedArtists, setLikedArtists] = useState<{total: number, preview: LikedItem[]}>({total: 0, preview: []});
   const [likedAlbums, setLikedAlbums] = useState<{total: number, preview: LikedItem[]}>({total: 0, preview: []});
   const [likedTracks, setLikedTracks] = useState<{total: number, preview: LikedItem[]}>({total: 0, preview: []});
+
+  // --- Local Storage Explorer State ---
+  const PROTECTED_KEYS = [
+    'bitbeats_user_pair',                  // SEA keypair
+    'gun/',                                // Any namespaced gun localStorage (precaution)
+    'vite:',                               // Vite HMR caches
+    'persist:',                            // Common prefixes
+    'bitbeats_settings',                   // hypothetical app settings
+  ];
+  const [lsItems, setLsItems] = useState<{ key: string; size: number; protected: boolean }[]>([]);
+
+  const computeSize = (val: string | null) => (val ? new Blob([val]).size : 0);
+
+  const refreshLocalStorage = useCallback(() => {
+    const items: { key: string; size: number; protected: boolean }[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i) || '';
+      const v = localStorage.getItem(k);
+      const isProtected =
+        PROTECTED_KEYS.some(p => k === p || k.startsWith(p));
+      items.push({ key: k, size: computeSize(v), protected: isProtected });
+    }
+    // Sort protected first for clarity
+    items.sort((a, b) => Number(b.protected) - Number(a.protected) || b.size - a.size);
+    setLsItems(items);
+  }, []);
+
+  useEffect(() => {
+    refreshLocalStorage();
+  }, [refreshLocalStorage]);
+
+  const deleteLocalStorageKey = (key: string) => {
+    const isProtected =
+      PROTECTED_KEYS.some(p => key === p || key.startsWith(p));
+    if (isProtected) {
+      alert('This item is protected and cannot be deleted.');
+      return;
+    }
+    localStorage.removeItem(key);
+    refreshLocalStorage();
+  };
+
+  const clearNonCriticalLocalStorage = () => {
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i) || '';
+      const isProtected =
+        PROTECTED_KEYS.some(p => k === p || k.startsWith(p));
+      if (!isProtected) toRemove.push(k);
+    }
+    toRemove.forEach(k => localStorage.removeItem(k));
+    refreshLocalStorage();
+    alert(`Cleared ${toRemove.length} non-critical items from Local Storage.`);
+  };
 
   // --- Fetch Likes ---
   useEffect(() => {
@@ -378,6 +431,54 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
                              {Object.keys(library).length === 0 && (
                                  <p className="text-gray-500 text-sm italic">No files in vault yet.</p>
                              )}
+                        </div>
+                    </div>
+
+                    {/* Local Storage Explorer (New) */}
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="font-bold text-white text-sm uppercase tracking-wider">Local Storage</h3>
+                          <button
+                            onClick={clearNonCriticalLocalStorage}
+                            className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1 rounded border border-red-500/20"
+                            title="Clear non-critical localStorage keys"
+                          >
+                            Clean Non-Critical
+                          </button>
+                        </div>
+                        {lsItems.length === 0 ? (
+                          <p className="text-gray-500 text-sm">Local Storage is empty.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {lsItems.map(item => (
+                              <div
+                                key={item.key}
+                                className="flex items-center justify-between px-3 py-2 bg-black/20 rounded-lg border border-white/10"
+                              >
+                                <div className="min-w-0">
+                                  <div className="text-white text-sm truncate">{item.key}</div>
+                                  <div className="text-xs text-gray-500">
+                                    {(item.size / 1024).toFixed(2)} KB {item.protected && '• Protected'}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => deleteLocalStorageKey(item.key)}
+                                  disabled={item.protected}
+                                  className={`text-xs px-2 py-1 rounded border ${
+                                    item.protected
+                                      ? 'opacity-40 cursor-not-allowed border-white/10 text-gray-500'
+                                      : 'border-red-500/20 text-red-400 hover:bg-red-500/10'
+                                  }`}
+                                  title={item.protected ? 'Protected item' : 'Delete from Local Storage'}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-4 text-[10px] text-gray-500 uppercase tracking-wider font-bold">
+                          Critical keys are protected automatically.
                         </div>
                     </div>
                 </div>
