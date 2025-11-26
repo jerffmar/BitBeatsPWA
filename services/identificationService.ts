@@ -1,4 +1,3 @@
-
 import { calculateSimilarity } from '../utils/stringDistance';
 
 const ACOUSTID_API_KEY = '8XaBELgH'; // Public demo key
@@ -41,13 +40,13 @@ const getBestReleaseInfo = (releases: any[] = []) => {
       let score = 0;
       if (type === 'Album') score += 10;
       if (type === 'EP') score += 5;
-      if (type === 'Single') score += 1; // Singles are low priority for "Album" field
+      if (type === 'Single') score += 2;
       
       // Penalize Compilations/Live unless they are the only option
       if (secondary.includes('Compilation') || secondary.includes('Live')) score -= 2;
       
       // 2. Status Priority
-      if (r.status === 'Official') score += 2;
+      if (r.status === 'Official') score += 3;
       
       return score;
     };
@@ -71,40 +70,130 @@ const getBestReleaseInfo = (releases: any[] = []) => {
 
 /**
  * Cleans filename by removing common track prefixes.
- * Examples: 
- * "01. Song.mp3" -> "Song"
- * "CD01.01. Song.mp3" -> "Song"
- * "A1 - Song.mp3" -> "Song"
+ * Examples: "01. Song.mp3" -> "Song", "CD01.01. Song.mp3" -> "Song", "A1 - Song.mp3" -> "Song"
  */
 const cleanFilename = (filename: string) => {
   // Remove extension
   let name = filename.substring(0, filename.lastIndexOf('.')) || filename;
-  
-  // Regex to remove prefixes like: "01.", "CD1.", "A1.", "1 - ", "CD02.18. "
-  // Matches optional text prefix (CD/Track) followed by digits and optional sub-digits/separators
-  name = name.replace(/^((?:CD|Dis[ck]|Track|Side|[A-Z])?\s*\d+(?:[\.\-]\d+)*\s*[ ._\-]+)+/i, '');
-  
-  return name.trim() || name; 
+  // Remove bracketed annotations
+  name = name.replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '');
+  // Normalize separators
+  name = name.replace(/_/g, ' ').replace(/-/g, ' ');
+  // Remove common numeric prefixes "01.", "1 -", "CD1.02." etc.
+  name = name.replace(/^((?:CD|Dis[ck]|Track|Side|[A-Z])?\s*\d+(?:[.\-]\d+)*\s*[ ._\-]+)+/i, '');
+  return name.trim();
 };
 
 /**
- * Extracts potential Artist and Title parts.
+ * Extracts candidate parts with multiple heuristics:
+ * - Artist - Title
+ * - Album - NN - Title
+ * - Title only
  */
-const parseFilename = (filename: string) => {
-  const cleanName = cleanFilename(filename);
-  
-  // Try "Part 1 - Part 2"
-  const hyphenMatch = cleanName.match(/^(.+?)\s*-\s*(.+?)$/);
-  if (hyphenMatch) {
-    return {
-      part1: hyphenMatch[1].trim(),
-      part2: hyphenMatch[2].trim(),
-      hasSplit: true
-    };
+const parseFilenameSmart = (filename: string) => {
+  const clean = cleanFilename(filename);
+
+  // Pattern: Artist - Title
+  let m = clean.match(/^(.+?)\s*-\s*(.+?)$/);
+  if (m) {
+    return { a: m[1].trim(), t: m[2].trim(), hasArtist: true };
   }
-  
-  // Fallback: Use whole name
-  return { part1: cleanName, part2: '', hasSplit: false };
+
+  // Pattern: Album - NN - Title (use last segment as title)
+  const parts = clean.split(/\s*-\s*/).map(p => p.trim()).filter(Boolean);
+  if (parts.length >= 3) {
+    const title = parts[parts.length - 1];
+    const artistOrAlbum = parts[0]; // Often album or artist; we will try both orders later
+    return { a: artistOrAlbum, t: title, hasArtist: true };
+  }
+
+  // Fallback: Title only
+  return { a: '', t: clean, hasArtist: false };
+};
+
+// Prefer best release by type/status/date
+const pickBestRelease = (releases: any[] = []) => {
+  if (!releases || releases.length === 0) return { title: 'Unknown Album', year: '' };
+
+  const scoreRelease = (r: any) => {
+    const type = r['release-group']?.['primary-type'] || '';
+    const secondary = r['release-group']?.['secondary-types'] || [];
+    let score = 0;
+    if (type === 'Album') score += 10;
+    if (type === 'EP') score += 5;
+    if (type === 'Single') score += 2;
+    if (r.status === 'Official') score += 3;
+    if (secondary.includes('Compilation') || secondary.includes('Live')) score -= 2;
+    return score;
+  };
+
+  const sorted = releases.slice().sort((a, b) => {
+    const sa = scoreRelease(a);
+    const sb = scoreRelease(b);
+    if (sa !== sb) return sb - sa;
+    const da = a.date || '9999';
+    const db = b.date || '9999';
+    return da.localeCompare(db);
+  });
+
+  const best = sorted[0];
+  return { title: best?.title || 'Unknown Album', year: best?.date?.substring(0, 4) || '' };
+};
+
+/**
+ * Try one Lucene search strategy and return the top-scoring fuzzy candidate.
+ */
+const fuzzySearchStrategy = async (title: string, artist?: string, fileDuration?: number) => {
+  // Build Lucene query
+  let lucene = `recording:"${title.replace(/"/g, '\\"')}"`;
+  if (artist) lucene += ` AND artist:"${artist.replace(/"/g, '\\"')}"`;
+
+  const url = `${MB_API_BASE}/recording?query=${encodeURIComponent(lucene)}&limit=15&fmt=json`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'BitBeats/2.0' } });
+  const data = await res.json();
+  const mbCandidates = data.recordings || [];
+
+  let bestCandidate: any = null;
+  let highestConfidence = 0;
+
+  for (const rec of mbCandidates) {
+    const recTitle = rec.title;
+    const recArtist = rec['artist-credit']?.[0]?.name || '';
+    const recDuration = rec.length ? rec.length / 1000 : 0;
+
+    // Title/Artist similarity
+    const titleScore = calculateSimilarity(title, recTitle);
+    const artistScore = artist ? calculateSimilarity(artist, recArtist) : 0.5;
+
+    // Duration tolerance (±30s strong, ±60s weak)
+    let durationScore = 0.5;
+    if (fileDuration && recDuration) {
+      const diff = Math.abs(fileDuration - recDuration);
+      if (diff <= 10) durationScore = 1.0;
+      else if (diff <= 30) durationScore = 0.8;
+      else if (diff <= 60) durationScore = 0.6;
+      else durationScore = 0.4;
+    }
+
+    // Weighted score: Title (55%) + Artist (25%) + Duration (20%)
+    const total = (titleScore * 0.55) + (artistScore * 0.25) + (durationScore * 0.20);
+    if (total > highestConfidence) {
+      highestConfidence = total;
+      bestCandidate = rec;
+    }
+  }
+
+  if (!bestCandidate || highestConfidence < 0.35) return null;
+
+  const bestRelease = pickBestRelease(bestCandidate.releases);
+  return {
+    id: bestCandidate.id,
+    title: bestCandidate.title,
+    artist: bestCandidate['artist-credit']?.[0]?.name || 'Unknown',
+    album: bestRelease.title,
+    year: bestRelease.year,
+    confidence: highestConfidence
+  };
 };
 
 /**
@@ -215,105 +304,32 @@ export const identifyAudioFile = async (
 };
 
 /**
- * Helper: Fuzzy Match Strategy using Metadata and Levenshtein Distance
+ * Helper: Fuzzy Match Strategy using multiple query orders and relaxed tolerance
  */
 const attemptFuzzyMatch = async (file: File, fileDuration: number): Promise<IdentificationResult> => {
-    console.log("⚠️ Falling back to Fuzzy Metadata Matching...");
-    
-    const { part1, part2, hasSplit } = parseFilename(file.name);
-    
-    // Construct Lucene Query
-    // Use an OR query to handle both "Artist - Title" and "Title - Artist" formats
-    // Escape quotes for Lucene
-    let query = '';
-    const p1 = part1.replace(/"/g, '\\"');
-    const p2 = part2.replace(/"/g, '\\"');
-    
-    if (hasSplit) {
-        query = `(recording:"${p1}" AND artist:"${p2}") OR (recording:"${p2}" AND artist:"${p1}")`;
-    } else {
-        query = `recording:"${p1}"`;
-    }
-    
-    const url = `${MB_API_BASE}/recording?query=${encodeURIComponent(query)}&limit=15&fmt=json`;
+  const { a, t, hasArtist } = parseFilenameSmart(file.name);
+  console.log("⚠️ Falling back to Fuzzy Metadata Matching...");
 
-    let mbCandidates: any[] = [];
+  // Try Artist+Title first
+  let candidate = await fuzzySearchStrategy(t, hasArtist ? a : undefined, fileDuration);
+  // If not found, try Title-only
+  if (!candidate) candidate = await fuzzySearchStrategy(t, undefined, fileDuration);
+  // If still not found and we had "Album - NN - Title", try swapped (Title, Artist)
+  if (!candidate && hasArtist) candidate = await fuzzySearchStrategy(a, t, fileDuration);
 
-    try {
-        const res = await fetch(url, { headers: { 'User-Agent': 'BitBeats/2.0' } });
-        const data = await res.json();
-        mbCandidates = data.recordings || [];
-    } catch (e) {
-        throw new IdentificationError("MusicBrainz API unreachable.");
-    }
+  if (candidate) {
+    return {
+      mbid: candidate.id,
+      title: candidate.title,
+      artist: candidate.artist,
+      album: candidate.album,
+      year: candidate.year,
+      coverUrl: 'https://images.unsplash.com/photo-1619983081563-430f63602796?q=80&w=300',
+      score: candidate.confidence,
+      methodUsed: 'fuzzy',
+      duration: fileDuration
+    };
+  }
 
-    // Rank Candidates
-    let bestCandidate = null;
-    let highestConfidence = 0;
-
-    for (const rec of mbCandidates) {
-        const recTitle = rec.title;
-        const recArtist = rec['artist-credit']?.[0]?.name || '';
-        const recDuration = rec.length ? rec.length / 1000 : 0;
-
-        let maxTextScore = 0;
-
-        if (hasSplit) {
-            // Scenario A: Part1 = Title, Part2 = Artist
-            const tA = calculateSimilarity(part1, recTitle);
-            const aA = calculateSimilarity(part2, recArtist);
-            const scoreA = (tA * 0.6) + (aA * 0.4);
-
-            // Scenario B: Part2 = Title, Part1 = Artist (Swap)
-            const tB = calculateSimilarity(part2, recTitle);
-            const aB = calculateSimilarity(part1, recArtist);
-            const scoreB = (tB * 0.6) + (aB * 0.4);
-
-            maxTextScore = Math.max(scoreA, scoreB);
-        } else {
-            // Only have one part, assume it's the title
-            const titleScore = calculateSimilarity(part1, recTitle);
-            maxTextScore = (titleScore * 0.8) + 0.1; // Slight penalty for missing artist verification
-        }
-
-        // Duration Check
-        let durationScore = 0;
-        if (recDuration && fileDuration > 0) {
-             const diff = Math.abs(fileDuration - recDuration);
-             if (diff < 5) durationScore = 1;
-             else if (diff < 15) durationScore = 0.8;
-             else if (diff < 30) durationScore = 0.5;
-        } else {
-            durationScore = 0.5; // Neutral if duration missing in metadata
-        }
-
-        // Weighted Average: Text Score (80%) + Duration (20%)
-        const totalScore = (maxTextScore * 0.8) + (durationScore * 0.2);
-        
-        if (totalScore > highestConfidence) {
-            highestConfidence = totalScore;
-            bestCandidate = rec;
-        }
-    }
-
-    if (bestCandidate && highestConfidence > 0.4) {
-        console.log(`✅ Fuzzy Match Found: ${bestCandidate.title} (${(highestConfidence*100).toFixed(0)}%)`);
-        
-        // Use intelligent release picker
-        const bestRelease = getBestReleaseInfo(bestCandidate.releases);
-
-        return {
-            mbid: bestCandidate.id,
-            title: bestCandidate.title,
-            artist: bestCandidate['artist-credit']?.[0]?.name || 'Unknown',
-            album: bestRelease.title,
-            year: bestRelease.year,
-            coverUrl: 'https://images.unsplash.com/photo-1619983081563-430f63602796?q=80&w=300', // Fallback
-            score: highestConfidence,
-            methodUsed: 'fuzzy',
-            duration: fileDuration
-        };
-    }
-
-    throw new IdentificationError("No matches found using any identification method.");
+  throw new IdentificationError("No matches found using any identification method.");
 };
