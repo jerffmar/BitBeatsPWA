@@ -10,10 +10,11 @@ declare global {
 }
 
 // Public relay peers for the mesh network
+// Updated list to remove dead Heroku peer and add reliable ones
 const PEERS = [
-  'https://gun-manhattan.herokuapp.com/gun', 
-  'https://plato.design/gun',
-  'https://relay.peer.ooo/gun'
+  'https://peer.wallie.io/gun',
+  'https://gundb-relay-mlccl.ondigitalocean.app/gun',
+  'https://plato.design/gun'
 ];
 
 let gun: any;
