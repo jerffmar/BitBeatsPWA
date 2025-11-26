@@ -26,6 +26,7 @@ import { ArtistPage } from './pages/ArtistPage';
 import { AlbumPage } from './pages/AlbumPage';
 import { LibraryDashboard } from './pages/LibraryDashboard';
 import { DiscoveryPage } from './pages/DiscoveryPage';
+import { LikeButton } from './components/LikeButton';
 
 // --- Components ---
 
@@ -193,9 +194,11 @@ function App() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const type = params.get('type');
+    const q = params.get('q');
     if (type && ['ALL','SONG','ALBUM','ARTIST'].includes(type)) {
        setSearchFilter(type as any);
     }
+    if (q) setSearchQuery(q);
   }, [location.search]);
 
   // --- Initialization ---
@@ -348,9 +351,7 @@ function App() {
 
           // 6. Save to Local Vault (OPFS) immediately
           // Note: publishTrackMetadata creates the ID but we need it here. 
-          // Ideally we generate ID first. For now, we wait for subscription or duplicate the logic.
-          // The `publishTrackMetadata` in `db.ts` generates a random ID. We should probably refactor to return it.
-          // For this PoC, we will wait for the track to appear in `tracks` state via subscription, 
+          // Ideally we generate ID first. For now, we wait for the track to appear in `tracks` state via subscription, 
           // OR we can manually add it to library with the magnet as ID for now until synced.
           // BUT, `saveToVault` needs an ID. 
           
@@ -389,7 +390,7 @@ function App() {
       if(!searchQuery.trim()) return;
 
       setIsSearching(true);
-      navigate('/search');
+      navigate(`/search?q=${searchQuery}`);
       setSearchFilter('ALL');
 
       const catalogResults = await searchGlobalCatalog(searchQuery, 0, 'ALL');
@@ -910,6 +911,7 @@ function App() {
                         library={library} 
                         tracks={tracks} 
                         onImport={handleLocalImport} 
+                        user={user}
                      />
                 } />
 
@@ -937,6 +939,18 @@ function App() {
                        </span>
                    </div>
                 </div>
+                {user && (
+                    <LikeButton 
+                        userId={user.id}
+                        entityId={currentTrack.id}
+                        entityType="track"
+                        metadata={{
+                            title: currentTrack.title,
+                            subtitle: currentTrack.artist,
+                            coverUrl: currentTrack.coverUrl
+                        }}
+                    />
+                )}
               </>
             ) : (
                 <div className="flex items-center gap-3 opacity-50">

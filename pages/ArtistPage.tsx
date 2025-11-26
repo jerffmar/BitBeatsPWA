@@ -6,6 +6,8 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Track } from '../types';
 import { lookupArtist, getArtistDiscography, MBArtist, MBRelease } from '../services/musicBrainz';
+import { LikeButton } from '../components/LikeButton';
+import { getSession } from '../services/auth';
 
 interface ArtistPageProps {
   onPlay: (track: Track) => void;
@@ -15,11 +17,17 @@ interface ArtistPageProps {
 export const ArtistPage: React.FC<ArtistPageProps> = ({ onPlay, swarmTracks }) => {
   const { id } = useParams();
   const [isFollowing, setIsFollowing] = useState(false);
-  const [expandedBio, setExpandedBio] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   
   const [artist, setArtist] = useState<MBArtist | null>(null);
   const [releases, setReleases] = useState<MBRelease[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getSession().then(user => {
+        if (user) setUserId(user.id);
+    });
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -46,7 +54,7 @@ export const ArtistPage: React.FC<ArtistPageProps> = ({ onPlay, swarmTracks }) =
       );
   }
 
-  if (!artist) return <div className="text-white p-10">Artist not found</div>;
+  if (!artist || !id) return <div className="text-white p-10">Artist not found</div>;
 
   // Background Image fallback using first album cover or generic
   const bgImage = releases[0]?.coverUrl || 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?q=80&w=1600';
@@ -81,17 +89,18 @@ export const ArtistPage: React.FC<ArtistPageProps> = ({ onPlay, swarmTracks }) =
 
       {/* --- ACTION BAR --- */}
       <div className="px-8 py-6 flex items-center gap-6 bg-gradient-to-b from-dark-bg to-dark-bg/95">
-          <button 
-            onClick={() => setIsFollowing(!isFollowing)}
-            className={twMerge(
-                "px-6 py-1.5 rounded-full border text-sm font-bold tracking-wide uppercase transition-colors",
-                isFollowing 
-                    ? "border-brand-500 text-brand-500" 
-                    : "border-gray-500 text-white hover:border-white"
-            )}
-          >
-              {isFollowing ? 'Following' : 'Follow'}
-          </button>
+          {userId && (
+              <LikeButton 
+                userId={userId}
+                entityId={id}
+                entityType="artist"
+                metadata={{
+                    title: artist.name,
+                    coverUrl: bgImage
+                }}
+                variant="button"
+              />
+          )}
 
           <button className="text-gray-400 hover:text-white transition-colors">
               <MoreHorizontal size={32} />

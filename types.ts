@@ -68,6 +68,16 @@ export interface LibraryEntry {
   addedAt: number;
 }
 
+export interface LikedItem {
+  entityId: string;
+  userId: string;
+  type: 'artist' | 'album' | 'track';
+  title: string;
+  subtitle?: string; // Artist name for tracks/albums
+  coverUrl: string;
+  addedAt: number;
+}
+
 // Result from MusicBrainz API (The Vitrine)
 export interface GlobalCatalogEntry {
   mbid: string;

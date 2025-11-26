@@ -3,21 +3,23 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   HardDrive, Mic2, Disc, Music, List, Upload, CheckCircle, 
-  AlertCircle, Loader, FileAudio, Database, Server, Layers
+  AlertCircle, Loader, FileAudio, Database, Server, Layers,
+  ChevronRight, Heart
 } from 'lucide-react';
-import { Track, LibraryEntry } from '../types';
+import { Track, LibraryEntry, LikedItem } from '../types';
 import { useTrackIdentifier } from '../hooks/useTrackIdentifier';
 import { DetailedMetadata } from '../services/musicBrainz';
+import { likeService } from '../services/likeService';
 
 interface LibraryDashboardProps {
   library: Record<string, LibraryEntry>;
   tracks: Track[];
   onImport: (file: File, metadata: DetailedMetadata) => Promise<void>;
+  user?: any;
 }
 
-export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tracks, onImport }) => {
+export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tracks, onImport, user }) => {
   const navigate = useNavigate();
-  const [stats, setStats] = useState({ artists: 0, albums: 0, songs: 0, playlists: 0 });
   const [storage, setStorage] = useState({ used: 0, quota: 0 });
   const [importing, setImporting] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
@@ -26,21 +28,21 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
   // Hook for Identification Logic
   const { identify, status, result, error, reset, complianceStatus } = useTrackIdentifier();
 
-  // --- Statistics Calculation ---
+  // Liked Items State
+  const [likedArtists, setLikedArtists] = useState<{total: number, preview: LikedItem[]}>({total: 0, preview: []});
+  const [likedAlbums, setLikedAlbums] = useState<{total: number, preview: LikedItem[]}>({total: 0, preview: []});
+  const [likedTracks, setLikedTracks] = useState<{total: number, preview: LikedItem[]}>({total: 0, preview: []});
+
+  // --- Fetch Likes ---
   useEffect(() => {
-    const libraryTrackIds = Object.keys(library);
-    const libraryTracks = tracks.filter(t => libraryTrackIds.includes(t.id));
-    
-    const uniqueArtists = new Set(libraryTracks.map(t => t.artist)).size;
-    const uniqueAlbums = new Set(libraryTracks.map(t => t.album)).size;
-    
-    setStats({
-      artists: uniqueArtists,
-      albums: uniqueAlbums,
-      songs: libraryTrackIds.length,
-      playlists: 0 // Placeholder for future feature
-    });
-  }, [library, tracks]);
+      if(!user) return;
+      const fetchLikes = async () => {
+          setLikedArtists(await likeService.getLikedPreview(user.id, 'artist'));
+          setLikedAlbums(await likeService.getLikedPreview(user.id, 'album'));
+          setLikedTracks(await likeService.getLikedPreview(user.id, 'track'));
+      };
+      fetchLikes();
+  }, [user]);
 
   // --- Storage Quota ---
   useEffect(() => {
@@ -85,7 +87,6 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
         if (status === 'success' && result && droppedFile && !importing) {
             setImporting(true);
             try {
-                // Convert IdentificationResult to DetailedMetadata
                 const meta: DetailedMetadata = {
                     mbid: result.mbid,
                     title: result.title,
@@ -111,24 +112,6 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
 
 
   // --- Helper Components ---
-  const StatCard = ({ label, count, icon: Icon, onClick }: { label: string, count: number, icon: any, onClick?: () => void }) => (
-    <div 
-        onClick={onClick}
-        className="group relative overflow-hidden bg-white/5 backdrop-blur-lg border border-white/10 p-6 rounded-2xl hover:bg-white/10 transition-all cursor-pointer"
-    >
-        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110">
-            <Icon size={64} />
-        </div>
-        <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-2 text-brand-500">
-                <Icon size={24} />
-                <h3 className="font-bold text-sm uppercase tracking-wider">{label}</h3>
-            </div>
-            <div className="text-4xl font-bold text-white">{count}</div>
-        </div>
-    </div>
-  );
-
   const formatBytes = (bytes: number, decimals = 2) => {
     if (!+bytes) return '0 Bytes';
     const k = 1024;
@@ -136,6 +119,78 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+  };
+
+  const LibraryWidget = ({ 
+      title, icon: Icon, total, items, type 
+  }: { 
+      title: string, icon: any, total: number, items: LikedItem[], type: 'artist'|'album'|'track' 
+  }) => {
+      
+      const handleItemClick = (item: LikedItem) => {
+          if (type === 'artist') navigate(`/artist/${item.entityId}`);
+          if (type === 'album') navigate(`/album/${item.entityId}`);
+          if (type === 'track') {
+             // For tracks, we ideally want to play it, but navigation is safer if it's not in the playlist
+             // Let's search for it or go to album. 
+             // For now, let's just trigger a search for the track title
+             navigate(`/search?type=SONG&q=${encodeURIComponent(item.title)}`);
+          }
+      };
+
+      const handleMore = () => {
+          let searchType = 'ALL';
+          if (type === 'artist') searchType = 'ARTIST';
+          if (type === 'album') searchType = 'ALBUM';
+          if (type === 'track') searchType = 'SONG';
+          navigate(`/search?type=${searchType}`); // In a real app, this would go to /library/artists
+      };
+
+      return (
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col h-[340px]">
+              <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2 text-brand-500 font-bold uppercase tracking-wider text-xs">
+                      <Icon size={16} /> {title}
+                  </div>
+                  <span className="text-gray-500 text-xs font-mono bg-white/5 px-2 py-0.5 rounded">{total}</span>
+              </div>
+              
+              <div className="flex-1">
+                  {items.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
+                          <Heart size={32} className="mb-2 text-gray-600" />
+                          <p className="text-sm text-gray-400">No favorites yet.</p>
+                          <button onClick={() => navigate('/search')} className="text-xs text-brand-500 mt-2 hover:underline">Start Exploring</button>
+                      </div>
+                  ) : (
+                      <div className="grid grid-cols-3 gap-2">
+                          {items.map(item => (
+                              <div 
+                                key={item.entityId} 
+                                onClick={() => handleItemClick(item)}
+                                className="aspect-square bg-gray-800 rounded-lg overflow-hidden relative group cursor-pointer border border-white/5 hover:border-brand-500/50 transition-colors"
+                              >
+                                  <img src={item.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                      <div className="text-[10px] text-white font-bold text-center px-1 truncate w-full">{item.title}</div>
+                                  </div>
+                              </div>
+                          ))}
+                          {/* Fill empty slots if less than 9 but more than 0 */}
+                          {Array.from({ length: Math.max(0, 9 - items.length) }).map((_, i) => (
+                              <div key={`empty-${i}`} className="aspect-square bg-white/5 rounded-lg border border-white/5 border-dashed"></div>
+                          ))}
+                      </div>
+                  )}
+              </div>
+
+              {total > 9 && (
+                  <button onClick={handleMore} className="w-full mt-4 py-2 flex items-center justify-center gap-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                      View All <ChevronRight size={12} />
+                  </button>
+              )}
+          </div>
+      );
   };
 
   return (
@@ -155,12 +210,29 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
 
         <div className="p-8 max-w-7xl mx-auto w-full space-y-8">
             
-            {/* Summary Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="Artists" count={stats.artists} icon={Mic2} onClick={() => navigate('/search?type=ARTIST')} />
-                <StatCard label="Albums" count={stats.albums} icon={Disc} onClick={() => navigate('/search?type=ALBUM')} />
-                <StatCard label="Songs" count={stats.songs} icon={Music} onClick={() => navigate('/search?type=SONG')} />
-                <StatCard label="Playlists" count={stats.playlists} icon={List} />
+            {/* Library Widgets Grid (Likes) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <LibraryWidget 
+                    title="Artists" 
+                    icon={Mic2} 
+                    total={likedArtists.total} 
+                    items={likedArtists.preview} 
+                    type="artist"
+                />
+                <LibraryWidget 
+                    title="Albums" 
+                    icon={Disc} 
+                    total={likedAlbums.total} 
+                    items={likedAlbums.preview} 
+                    type="album"
+                />
+                <LibraryWidget 
+                    title="Songs" 
+                    icon={Music} 
+                    total={likedTracks.total} 
+                    items={likedTracks.preview} 
+                    type="track"
+                />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

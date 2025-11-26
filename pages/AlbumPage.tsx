@@ -6,6 +6,8 @@ import { clsx } from 'clsx';
 import { Track } from '../types';
 import { lookupRelease, MBReleaseDetail } from '../services/musicBrainz';
 import { createBounty } from '../services/db';
+import { LikeButton } from '../components/LikeButton';
+import { getSession } from '../services/auth';
 
 interface AlbumPageProps {
   onPlay: (track: Track) => void;
@@ -18,6 +20,13 @@ export const AlbumPage: React.FC<AlbumPageProps> = ({ onPlay, currentTrackId, is
   const { id } = useParams();
   const [album, setAlbum] = useState<MBReleaseDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    getSession().then(user => {
+        if (user) setUserId(user.id);
+    });
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -50,7 +59,7 @@ export const AlbumPage: React.FC<AlbumPageProps> = ({ onPlay, currentTrackId, is
       );
   }
 
-  if (!album) return <div className="text-white p-10">Album not found or error loading metadata.</div>;
+  if (!album || !id) return <div className="text-white p-10">Album not found or error loading metadata.</div>;
 
   const totalDurationMin = Math.floor(album.tracks.reduce((acc, t) => acc + (t.duration || 0), 0) / 60);
 
@@ -97,9 +106,19 @@ export const AlbumPage: React.FC<AlbumPageProps> = ({ onPlay, currentTrackId, is
                      <button className="bg-brand-500 text-black px-8 py-3 rounded-md font-bold hover:bg-brand-400 active:scale-95 transition-all shadow-lg shadow-brand-500/10 flex items-center gap-2">
                          <Play size={18} fill="currentColor" /> Play All
                      </button>
-                     <button className="p-3 border border-white/10 rounded-full hover:bg-white/10 text-brand-500 transition-colors">
-                         <Heart size={20} fill="currentColor" />
-                     </button>
+                     {userId && (
+                         <LikeButton 
+                            userId={userId}
+                            entityId={id}
+                            entityType="album"
+                            metadata={{
+                                title: album.title,
+                                coverUrl: album.coverUrl,
+                                subtitle: album.artist
+                            }}
+                            variant="button"
+                         />
+                     )}
                      <button className="p-3 border border-white/10 rounded-full hover:bg-white/10 text-gray-400 transition-colors">
                          <MoreHorizontal size={20} />
                      </button>
@@ -152,21 +171,37 @@ export const AlbumPage: React.FC<AlbumPageProps> = ({ onPlay, currentTrackId, is
                             </div>
 
                             {/* Title & Icons */}
-                            <div className="min-w-0 pr-4">
-                                <div className={clsx("font-medium truncate text-base", active ? "text-brand-400" : "text-white")}>
-                                    {track.title}
+                            <div className="min-w-0 pr-4 flex items-center gap-3">
+                                <div className="min-w-0">
+                                    <div className={clsx("font-medium truncate text-base", active ? "text-brand-400" : "text-white")}>
+                                        {track.title}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                        {isPlayable ? (
+                                            <span className="flex items-center gap-1 text-[10px] text-green-500 bg-green-500/10 px-1.5 rounded border border-green-500/20">
+                                                <CheckCircle size={10} /> Available in Swarm
+                                            </span>
+                                        ) : (
+                                            <span className="flex items-center gap-1 text-[10px] text-gray-500 bg-white/5 px-1.5 rounded border border-white/10">
+                                                Not Cached
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                    {isPlayable ? (
-                                        <span className="flex items-center gap-1 text-[10px] text-green-500 bg-green-500/10 px-1.5 rounded border border-green-500/20">
-                                            <CheckCircle size={10} /> Available in Swarm
-                                        </span>
-                                    ) : (
-                                        <span className="flex items-center gap-1 text-[10px] text-gray-500 bg-white/5 px-1.5 rounded border border-white/10">
-                                            Not Cached
-                                        </span>
-                                    )}
-                                </div>
+                                {userId && isPlayable && swarmMatch && (
+                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
+                                        <LikeButton 
+                                            userId={userId}
+                                            entityId={swarmMatch.id}
+                                            entityType="track"
+                                            metadata={{
+                                                title: swarmMatch.title,
+                                                subtitle: swarmMatch.artist,
+                                                coverUrl: swarmMatch.coverUrl
+                                            }}
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Action Button */}
