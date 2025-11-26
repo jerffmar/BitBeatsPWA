@@ -169,6 +169,10 @@ function App() {
   const [duration, setDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(new Audio());
 
+  // Seeking
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+
   // Stats
   const [stats, setStats] = useState<UserStats>({
     downloadedBytes: 0,
@@ -238,7 +242,9 @@ function App() {
     const audio = audioRef.current;
     audio.crossOrigin = "anonymous";
 
-    const updateTime = () => setCurrentTime(audio.currentTime);
+    const updateTime = () => {
+        if (!isDraggingRef.current) setCurrentTime(audio.currentTime);
+    };
     const updateDuration = () => setDuration(audio.duration || 0);
     const onEnded = () => setIsPlaying(false);
     const onError = (e: Event) => {
@@ -261,6 +267,48 @@ function App() {
   }, [user]);
 
   // --- Main Logic & Handlers ---
+
+  const handleSeekStart = (e: React.MouseEvent) => {
+      if (!duration) return;
+      isDraggingRef.current = true;
+
+      const updateSeek = (clientX: number) => {
+          if (!progressBarRef.current) return;
+          const rect = progressBarRef.current.getBoundingClientRect();
+          const x = clientX - rect.left;
+          const width = rect.width;
+          const percentage = Math.max(0, Math.min(1, x / width));
+          setCurrentTime(percentage * duration);
+      };
+
+      updateSeek(e.clientX);
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+          moveEvent.preventDefault();
+          updateSeek(moveEvent.clientX);
+      };
+
+      const handleMouseUp = (upEvent: MouseEvent) => {
+          isDraggingRef.current = false;
+          if (!progressBarRef.current) return;
+          
+          const rect = progressBarRef.current.getBoundingClientRect();
+          const x = upEvent.clientX - rect.left;
+          const width = rect.width;
+          const percentage = Math.max(0, Math.min(1, x / width));
+          const finalTime = percentage * duration;
+          
+          if (audioRef.current) {
+              audioRef.current.currentTime = finalTime;
+          }
+          
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+  };
 
   const handleLocalImport = async (file: File, metadata: DetailedMetadata) => {
       if (!user) return;
@@ -911,18 +959,31 @@ function App() {
             </div>
             <div className="w-full max-w-md flex items-center gap-3 text-xs text-gray-400 font-mono">
                <span>{Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2,'0')}</span>
-               <div className="flex-1 h-1 bg-gray-700 rounded-full relative group cursor-pointer">
-                  {currentTrack && (
-                     <div 
-                       className="absolute h-full bg-gray-500 rounded-full opacity-50 transition-all duration-1000"
-                       style={{ width: `${library[currentTrack.id]?.progress ? library[currentTrack.id]?.progress * 100 : 0}%` }} 
-                     />
-                  )}
-                  <div 
-                     className="absolute h-full bg-brand-500 rounded-full"
-                     style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
-                  ></div>
+               
+               <div 
+                   ref={progressBarRef}
+                   className="flex-1 h-3 group cursor-pointer flex items-center select-none touch-none"
+                   onMouseDown={handleSeekStart}
+               >
+                  <div className="w-full h-1 bg-gray-700 rounded-full relative overflow-visible">
+                      {/* Download / Cache Progress */}
+                      {currentTrack && (
+                          <div 
+                            className="absolute left-0 top-0 bottom-0 bg-gray-600 rounded-full opacity-50 transition-all duration-1000"
+                            style={{ width: `${library[currentTrack.id]?.progress ? library[currentTrack.id]?.progress * 100 : 0}%` }} 
+                          />
+                      )}
+                      {/* Playback Progress */}
+                      <div 
+                         className="absolute left-0 top-0 bottom-0 bg-brand-500 rounded-full"
+                         style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+                      >
+                         {/* The Handle / Dot */}
+                         <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-white rounded-full shadow-lg scale-0 group-hover:scale-100 transition-transform active:scale-110"></div>
+                      </div>
+                  </div>
                </div>
+
                <span>{Math.floor(duration / 60)}:{Math.floor(duration % 60).toString().padStart(2,'0')}</span>
             </div>
          </div>
