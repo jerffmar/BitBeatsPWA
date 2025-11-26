@@ -3,21 +3,24 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   HardDrive, Mic2, Disc, Music, List, Upload, CheckCircle, 
-  AlertCircle, Loader, FileAudio, Database, Server, Layers
+  AlertCircle, Loader, FileAudio, Database, Server, Layers,
+  ChevronRight
 } from 'lucide-react';
-import { Track, LibraryEntry } from '../types';
+import { Track, LibraryEntry, LikedItem } from '../types';
 import { useTrackIdentifier } from '../hooks/useTrackIdentifier';
 import { DetailedMetadata } from '../services/musicBrainz';
+import { likeService } from '../services/likeService';
+import { CoverImage } from '../components/ui/CoverImage';
 
 interface LibraryDashboardProps {
   library: Record<string, LibraryEntry>;
   tracks: Track[];
   onImport: (file: File, metadata: DetailedMetadata) => Promise<void>;
+  user?: any;
 }
 
-export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tracks, onImport }) => {
+export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tracks, onImport, user }) => {
   const navigate = useNavigate();
-  const [stats, setStats] = useState({ artists: 0, albums: 0, songs: 0, playlists: 0 });
   const [storage, setStorage] = useState({ used: 0, quota: 0 });
   const [importing, setImporting] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
@@ -26,21 +29,21 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
   // Hook for Identification Logic
   const { identify, status, result, error, reset, complianceStatus } = useTrackIdentifier();
 
-  // --- Statistics Calculation ---
+  // Liked Items State
+  const [likedArtists, setLikedArtists] = useState<{total: number, preview: LikedItem[]}>({total: 0, preview: []});
+  const [likedAlbums, setLikedAlbums] = useState<{total: number, preview: LikedItem[]}>({total: 0, preview: []});
+  const [likedTracks, setLikedTracks] = useState<{total: number, preview: LikedItem[]}>({total: 0, preview: []});
+
+  // --- Fetch Likes ---
   useEffect(() => {
-    const libraryTrackIds = Object.keys(library);
-    const libraryTracks = tracks.filter(t => libraryTrackIds.includes(t.id));
-    
-    const uniqueArtists = new Set(libraryTracks.map(t => t.artist)).size;
-    const uniqueAlbums = new Set(libraryTracks.map(t => t.album)).size;
-    
-    setStats({
-      artists: uniqueArtists,
-      albums: uniqueAlbums,
-      songs: libraryTrackIds.length,
-      playlists: 0 // Placeholder for future feature
-    });
-  }, [library, tracks]);
+      if(!user) return;
+      const fetchLikes = async () => {
+          setLikedArtists(await likeService.getLikedPreview(user.id, 'artist'));
+          setLikedAlbums(await likeService.getLikedPreview(user.id, 'album'));
+          setLikedTracks(await likeService.getLikedPreview(user.id, 'track'));
+      };
+      fetchLikes();
+  }, [user]);
 
   // --- Storage Quota ---
   useEffect(() => {
@@ -85,7 +88,6 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
         if (status === 'success' && result && droppedFile && !importing) {
             setImporting(true);
             try {
-                // Convert IdentificationResult to DetailedMetadata
                 const meta: DetailedMetadata = {
                     mbid: result.mbid,
                     title: result.title,
@@ -111,24 +113,6 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
 
 
   // --- Helper Components ---
-  const StatCard = ({ label, count, icon: Icon, onClick }: { label: string, count: number, icon: any, onClick?: () => void }) => (
-    <div 
-        onClick={onClick}
-        className="group relative overflow-hidden bg-white/5 backdrop-blur-lg border border-white/10 p-6 rounded-2xl hover:bg-white/10 transition-all cursor-pointer"
-    >
-        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110">
-            <Icon size={64} />
-        </div>
-        <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-2 text-brand-500">
-                <Icon size={24} />
-                <h3 className="font-bold text-sm uppercase tracking-wider">{label}</h3>
-            </div>
-            <div className="text-4xl font-bold text-white">{count}</div>
-        </div>
-    </div>
-  );
-
   const formatBytes = (bytes: number, decimals = 2) => {
     if (!+bytes) return '0 Bytes';
     const k = 1024;
@@ -136,6 +120,73 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+  };
+
+  /**
+   * Widget Design: "Folder Preview"
+   * Displays a 2x2 grid of the top 4 items.
+   * Acts as a big button to navigate to the specific library page.
+   */
+  const LibraryWidget = ({ 
+      title, icon: Icon, total, items, path, type
+  }: { 
+      title: string, icon: any, total: number, items: LikedItem[], path: string, type: 'artist' | 'album' | 'track'
+  }) => {
+      
+      const gridItems = [...items];
+      // Fill remaining slots with nulls up to 4 to maintain grid structure
+      while(gridItems.length < 4) {
+          gridItems.push(null as any);
+      }
+      
+      // Take only top 4
+      const displayItems = gridItems.slice(0, 4);
+
+      return (
+          <div 
+            onClick={() => navigate(path)}
+            className="group bg-white/5 border border-white/10 rounded-2xl p-5 cursor-pointer hover:bg-white/10 hover:border-white/20 hover:scale-[1.02] transition-all duration-300 shadow-lg"
+          >
+              <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2 text-white font-bold text-sm">
+                      <div className="bg-brand-500/10 p-2 rounded-lg text-brand-500">
+                        <Icon size={18} /> 
+                      </div>
+                      {title}
+                  </div>
+                  <span className="text-gray-500 text-xs font-mono bg-black/20 px-2 py-1 rounded">{total}</span>
+              </div>
+              
+              {/* 2x2 Folder Grid */}
+              <div className="aspect-square bg-black/20 rounded-xl overflow-hidden p-1 grid grid-cols-2 gap-0.5 border border-white/5 relative">
+                  {displayItems.map((item, i) => (
+                      <div key={i} className="bg-white/5 w-full h-full overflow-hidden relative first:rounded-tl-lg second:rounded-tr-lg third:rounded-bl-lg fourth:rounded-br-lg">
+                          {item ? (
+                              <CoverImage 
+                                mbid={item.entityId} 
+                                fallbackSrc={item.coverUrl}
+                                type={type}
+                                size="small"
+                                className="w-full h-full object-cover" 
+                                alt={item.title} 
+                              />
+                          ) : (
+                              <div className="w-full h-full flex items-center justify-center opacity-10 text-gray-400">
+                                  <Icon size={24} />
+                              </div>
+                          )}
+                      </div>
+                  ))}
+                  
+                  {/* Hover Overlay */}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px]">
+                      <div className="bg-brand-500 text-black px-4 py-2 rounded-full font-bold text-xs shadow-xl flex items-center gap-1">
+                          Open <ChevronRight size={12} />
+                      </div>
+                  </div>
+              </div>
+          </div>
+      );
   };
 
   return (
@@ -155,12 +206,38 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
 
         <div className="p-8 max-w-7xl mx-auto w-full space-y-8">
             
-            {/* Summary Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="Artists" count={stats.artists} icon={Mic2} onClick={() => navigate('/search?type=ARTIST')} />
-                <StatCard label="Albums" count={stats.albums} icon={Disc} onClick={() => navigate('/search?type=ALBUM')} />
-                <StatCard label="Songs" count={stats.songs} icon={Music} onClick={() => navigate('/search?type=SONG')} />
-                <StatCard label="Playlists" count={stats.playlists} icon={List} />
+            {/* Library Widgets Grid (Likes) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <LibraryWidget 
+                    title="Artists" 
+                    icon={Mic2} 
+                    total={likedArtists.total} 
+                    items={likedArtists.preview} 
+                    path="/library/artists"
+                    type="artist"
+                />
+                <LibraryWidget 
+                    title="Albums" 
+                    icon={Disc} 
+                    total={likedAlbums.total} 
+                    items={likedAlbums.preview} 
+                    path="/library/albums"
+                    type="album"
+                />
+                <LibraryWidget 
+                    title="Songs" 
+                    icon={Music} 
+                    total={likedTracks.total} 
+                    items={likedTracks.preview} 
+                    path="/library/tracks"
+                    type="track"
+                />
+                {/* Placeholder Playlist Widget */}
+                 <div className="group bg-white/5 border border-white/10 border-dashed rounded-2xl p-5 cursor-not-allowed opacity-60 flex flex-col justify-center items-center text-center h-[340px] md:h-auto">
+                    <List size={32} className="mb-2 text-gray-500" />
+                    <h3 className="text-white font-bold text-sm">Playlists</h3>
+                    <p className="text-xs text-gray-500">Coming Soon</p>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -300,7 +377,14 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
                                  return (
                                      <div key={idx} className="flex items-center gap-3 group cursor-pointer hover:bg-white/5 p-2 -mx-2 rounded-lg transition-colors">
                                          <div className="w-8 h-8 rounded bg-gray-800 overflow-hidden">
-                                             <img src={track.coverUrl} className="w-full h-full object-cover" alt={track.title} />
+                                             <CoverImage 
+                                                mbid={track.mbid} 
+                                                fallbackSrc={track.coverUrl}
+                                                type="track"
+                                                size="small"
+                                                className="w-full h-full object-cover" 
+                                                alt={track.title} 
+                                             />
                                          </div>
                                          <div className="min-w-0 flex-1">
                                              <div className="text-sm text-white truncate font-medium">{track.title}</div>
