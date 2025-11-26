@@ -1,0 +1,16 @@
+
+name: API Health Check
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  test-musicbrainz:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check MusicBrainz API
+        run: |
+          curl -H "User-Agent: BitBeats/1.0 ( test@example.com )" -f "https://musicbrainz.org/ws/2/recording?query=recording:%22Desire%20Be%22%20AND%20artist:%22Tame%20Impala%22&fmt=json"

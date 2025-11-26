@@ -1,3 +1,4 @@
+
 import { calculateSimilarity } from '../utils/stringDistance';
 
 const ACOUSTID_API_KEY = '8XaBELgH'; // Public demo key
@@ -23,23 +24,41 @@ export class IdentificationError extends Error {
 }
 
 /**
- * Extracts Artist and Title from filenames.
- * e.g. "The Midnight - Sunset.mp3" -> { artist: "The Midnight", title: "Sunset" }
+ * Cleans filename by removing common track prefixes.
+ * Examples: 
+ * "01. Song.mp3" -> "Song"
+ * "CD01.01. Song.mp3" -> "Song"
+ * "A1 - Song.mp3" -> "Song"
+ */
+const cleanFilename = (filename: string) => {
+  // Remove extension
+  let name = filename.substring(0, filename.lastIndexOf('.')) || filename;
+  
+  // Regex to remove prefixes like: "01.", "CD1.", "A1.", "1 - ", "CD02.18. "
+  // Matches optional text prefix (CD/Track) followed by digits and optional sub-digits/separators
+  name = name.replace(/^((?:CD|Dis[ck]|Track|Side|[A-Z])?\s*\d+(?:[\.\-]\d+)*\s*[ ._\-]+)+/i, '');
+  
+  return name.trim() || name; 
+};
+
+/**
+ * Extracts potential Artist and Title parts.
  */
 const parseFilename = (filename: string) => {
-  const cleanName = filename.substring(0, filename.lastIndexOf('.')) || filename;
+  const cleanName = cleanFilename(filename);
   
-  // Try "Artist - Title"
+  // Try "Part 1 - Part 2"
   const hyphenMatch = cleanName.match(/^(.+?)\s*-\s*(.+?)$/);
   if (hyphenMatch) {
     return {
-      artist: hyphenMatch[1].trim(),
-      title: hyphenMatch[2].trim()
+      part1: hyphenMatch[1].trim(),
+      part2: hyphenMatch[2].trim(),
+      hasSplit: true
     };
   }
   
-  // Fallback: Use whole name as title
-  return { title: cleanName.trim(), artist: '' };
+  // Fallback: Use whole name
+  return { part1: cleanName, part2: '', hasSplit: false };
 };
 
 /**
@@ -153,13 +172,22 @@ export const identifyAudioFile = async (
 const attemptFuzzyMatch = async (file: File, fileDuration: number): Promise<IdentificationResult> => {
     console.log("⚠️ Falling back to Fuzzy Metadata Matching...");
     
-    const { artist, title } = parseFilename(file.name);
+    const { part1, part2, hasSplit } = parseFilename(file.name);
     
     // Construct Lucene Query
-    let query = `recording:"${title.replace(/"/g, '')}"`;
-    if (artist) query += ` AND artist:"${artist.replace(/"/g, '')}"`;
+    // Use an OR query to handle both "Artist - Title" and "Title - Artist" formats
+    // Escape quotes for Lucene
+    let query = '';
+    const p1 = part1.replace(/"/g, '\\"');
+    const p2 = part2.replace(/"/g, '\\"');
     
-    const url = `${MB_API_BASE}/recording?query=${encodeURIComponent(query)}&limit=10&fmt=json`;
+    if (hasSplit) {
+        query = `(recording:"${p1}" AND artist:"${p2}") OR (recording:"${p2}" AND artist:"${p1}")`;
+    } else {
+        query = `recording:"${p1}"`;
+    }
+    
+    const url = `${MB_API_BASE}/recording?query=${encodeURIComponent(query)}&limit=15&fmt=json`;
 
     let mbCandidates: any[] = [];
 
@@ -180,16 +208,27 @@ const attemptFuzzyMatch = async (file: File, fileDuration: number): Promise<Iden
         const recArtist = rec['artist-credit']?.[0]?.name || '';
         const recDuration = rec.length ? rec.length / 1000 : 0;
 
-        // Score Calculation
-        const titleScore = calculateSimilarity(title, recTitle);
-        
-        let artistScore = 0;
-        if (artist) {
-            artistScore = calculateSimilarity(artist, recArtist);
+        let maxTextScore = 0;
+
+        if (hasSplit) {
+            // Scenario A: Part1 = Title, Part2 = Artist
+            const tA = calculateSimilarity(part1, recTitle);
+            const aA = calculateSimilarity(part2, recArtist);
+            const scoreA = (tA * 0.6) + (aA * 0.4);
+
+            // Scenario B: Part2 = Title, Part1 = Artist (Swap)
+            const tB = calculateSimilarity(part2, recTitle);
+            const aB = calculateSimilarity(part1, recArtist);
+            const scoreB = (tB * 0.6) + (aB * 0.4);
+
+            maxTextScore = Math.max(scoreA, scoreB);
         } else {
-            artistScore = 0.5; // Neutral if we don't know the artist
+            // Only have one part, assume it's the title
+            const titleScore = calculateSimilarity(part1, recTitle);
+            maxTextScore = (titleScore * 0.8) + 0.1; // Slight penalty for missing artist verification
         }
 
+        // Duration Check
         let durationScore = 0;
         if (recDuration && fileDuration > 0) {
              const diff = Math.abs(fileDuration - recDuration);
@@ -197,12 +236,11 @@ const attemptFuzzyMatch = async (file: File, fileDuration: number): Promise<Iden
              else if (diff < 15) durationScore = 0.8;
              else if (diff < 30) durationScore = 0.5;
         } else {
-            durationScore = 0.5; // Neutral if duration missing
+            durationScore = 0.5; // Neutral if duration missing in metadata
         }
 
-        // Weighted Average
-        // Title is king (50%), Artist (30%), Duration (20%)
-        const totalScore = (titleScore * 0.5) + (artistScore * 0.3) + (durationScore * 0.2);
+        // Weighted Average: Text Score (80%) + Duration (20%)
+        const totalScore = (maxTextScore * 0.8) + (durationScore * 0.2);
         
         if (totalScore > highestConfidence) {
             highestConfidence = totalScore;
