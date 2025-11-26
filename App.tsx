@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import { 
@@ -26,6 +25,7 @@ import { UploadZone } from './components/UploadZone';
 import { MetadataResolver } from './components/MetadataResolver';
 import { ArtistPage } from './pages/ArtistPage';
 import { AlbumPage } from './pages/AlbumPage';
+import { LibraryDashboard } from './pages/LibraryDashboard';
 
 // --- Components ---
 
@@ -69,67 +69,10 @@ const RatioBadge: React.FC<{ stats: UserStats }> = ({ stats }) => {
   );
 };
 
-const TrackRow: React.FC<{ 
-  track: Track; 
-  entry?: LibraryEntry; 
-  isPlaying: boolean;
-  onPlay: () => void;
-  onExport: () => void;
-}> = ({ track, entry, isPlaying, onPlay, onExport }) => {
-  const status = entry?.status || 'REMOTE';
-  
-  return (
-    <div 
-      className={`group flex items-center gap-4 p-3 rounded-xl cursor-pointer hover:bg-white/5 transition-colors ${isPlaying ? 'bg-white/10' : ''}`}
-    >
-      <div onClick={onPlay} className="relative w-12 h-12 rounded-md overflow-hidden flex-shrink-0 cursor-pointer">
-        <img src={track.coverUrl} alt={track.title} className="w-full h-full object-cover" />
-        <div className={`absolute inset-0 bg-black/40 flex items-center justify-center ${isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-           {isPlaying ? <div className="w-3 h-3 bg-brand-500 rounded-full animate-pulse" /> : <Play size={16} className="text-white fill-current" />}
-        </div>
-      </div>
-      
-      <div onClick={onPlay} className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-            <h3 className={`font-medium truncate ${isPlaying ? 'text-brand-400' : 'text-white'}`}>{track.title}</h3>
-            {track.networkHealth < 20 && (
-                <span className="text-[9px] bg-red-500/20 text-red-300 px-1.5 rounded border border-red-500/20">RARE</span>
-            )}
-        </div>
-        <p className="text-sm text-gray-400 truncate">{track.artist}</p>
-      </div>
-
-      <div className="flex items-center gap-3">
-        {status === 'SEEDING' && (
-             <Button variant="icon" title="Export to Downloads" onClick={(e) => { e.stopPropagation(); onExport(); }}>
-                 <Download size={14} />
-             </Button>
-        )}
-
-        {status === 'SEEDING' ? (
-          <div className="text-brand-500 flex items-center gap-1" title="Seeding from Vault">
-             <Share2 size={16} />
-             <span className="text-xs hidden sm:block">SEED</span>
-          </div>
-        ) : status === 'DOWNLOADING' ? (
-          <div className="text-cyan-400 animate-pulse flex items-center gap-1">
-             <Download size={16} />
-             <span className="text-xs hidden sm:block">{entry?.progress ? Math.round(entry.progress * 100) : 0}%</span>
-          </div>
-        ) : (
-          <div className="text-gray-600" title="Remote Source">
-             <Globe size={16} />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 const CatalogCard: React.FC<{ item: GlobalCatalogEntry, onRequest: (item: GlobalCatalogEntry) => void }> = ({ item, onRequest }) => {
      let Icon = Music;
      let legend = "Song";
-     let linkPath = ""; // New: Link Logic
+     let linkPath = ""; 
      
      if (item.type === 'album') { Icon = Disc; legend = "Album"; linkPath = `/album/${item.mbid}`; }
      if (item.type === 'artist') { Icon = Mic; legend = "Artist"; linkPath = `/artist/${item.mbid}`; }
@@ -221,9 +164,6 @@ function App() {
       catalog: SearchResults
   }>({ available: [], catalog: { songs: [], albums: [], artists: [] } });
 
-  // Creator Studio State
-  const [uploadStatus, setUploadStatus] = useState<string>('');
-
   // Audio
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -235,7 +175,7 @@ function App() {
     uploadedBytes: 0,
     ratio: 1.0,
     reputation: 'Member',
-    credits: 0 // Will fetch from DB
+    credits: 0
   });
 
   // --- Auth Check ---
@@ -251,46 +191,37 @@ function App() {
 
     const init = async () => {
        const initialLibrary: Record<string, LibraryEntry> = {};
-       
        initDB();
-       
        subscribeToPosts((post) => {
           setSocialPosts(prev => {
              if (prev.some(p => p.id === post.id)) return prev;
              return [post, ...prev].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
           });
        });
-       
        subscribeToBounties((bounty) => {
            setBounties(prev => {
                if(prev.some(b => b.id === bounty.id)) return prev;
                return [bounty, ...prev];
            })
        });
-
        subscribeToTracks((track) => {
            setTracks(prev => {
                if (prev.some(t => t.id === track.id)) return prev;
                return [track, ...prev];
            });
        });
-
        subscribeToParties((party) => {
           setActiveParties(prev => {
              if (prev.some(p => p.id === party.id)) return prev;
              return [party, ...prev];
           });
        });
-
        subscribeToCredits(user.id, (credits) => {
           setStats(s => ({ ...s, credits }));
        });
-
        initTorrentClient();
-       
        const peers = await discoverLocalPeers();
        setActivePeers(peers);
-       
        setLibrary(initialLibrary);
     };
     init();
@@ -320,32 +251,81 @@ function App() {
     };
   }, [user]);
 
-  useEffect(() => {
-      if(!user) return;
-      const interval = setInterval(async () => {
-          const downloading = Object.values(library).filter(e => e.status === 'DOWNLOADING' && e.localPath); 
-          downloading.forEach(entry => {
-              if(!entry.localPath) return;
-              const stats = getTorrentStats(entry.localPath);
-              if(stats) {
-                  setLibrary(prev => {
-                      const updated = { ...prev[entry.trackId], progress: stats.progress };
-                      if(stats.progress >= 1) {
-                          updated.status = 'SEEDING';
-                      }
-                      return { ...prev, [entry.trackId]: updated };
-                  });
-              }
-          });
-          setStats(prev => ({
+  // --- Main Logic & Handlers ---
+
+  const handleLocalImport = async (file: File, metadata: DetailedMetadata) => {
+      if (!user) return;
+      console.log("📥 Starting Local Import:", metadata.title);
+      
+      try {
+          // 1. Analyze & Normalize
+          const analysis = await analyzeAudio(file);
+          const processedBlob = await normalizeAndTranscode(analysis.buffer);
+          const processedFile = new File([processedBlob], `${metadata.artist} - ${metadata.title}.wav`, { type: 'audio/wav' });
+
+          // 2. Cryptographic Signing
+          const signature = await signUpload(processedFile, `hash_${analysis.fingerprint}`);
+
+          // 3. Seed to DHT (This gives us the Magnet URI)
+          const magnet = await seedFile(processedFile, `[BitBeats] ${metadata.artist} - ${metadata.title}`);
+          
+          // 4. Construct Track Object
+          const newTrack: Partial<Track> = {
+              mbid: metadata.mbid, 
+              title: metadata.title,
+              artist: metadata.artist,
+              album: metadata.album,
+              coverUrl: metadata.coverUrl,
+              duration: analysis.duration,
+              audioUrl: magnet,
+              license: 'CC-BY',
+              size: processedFile.size / 1024 / 1024,
+              tags: metadata.tags || ['p2p', 'upload'],
+              bpm: 120, 
+              networkHealth: 100,
+              artistSignature: signature
+          };
+
+          // 5. Publish Metadata to Gun.js Swarm
+          await publishTrackMetadata(newTrack);
+
+          // 6. Save to Local Vault (OPFS) immediately
+          // Note: publishTrackMetadata creates the ID but we need it here. 
+          // Ideally we generate ID first. For now, we wait for subscription or duplicate the logic.
+          // The `publishTrackMetadata` in `db.ts` generates a random ID. We should probably refactor to return it.
+          // For this PoC, we will wait for the track to appear in `tracks` state via subscription, 
+          // OR we can manually add it to library with the magnet as ID for now until synced.
+          // BUT, `saveToVault` needs an ID. 
+          
+          // Let's manually generate an ID to ensure instant local availability
+          const tempId = `local_${Date.now()}`;
+          const arrayBuffer = await processedBlob.arrayBuffer();
+          await saveToVault(tempId, arrayBuffer); // Save normalized audio
+
+          // Update Library State Optimistically
+          setLibrary(prev => ({
               ...prev,
-              ratio: calculateRatio(prev.downloadedBytes + 1, prev.uploadedBytes)
+              [tempId]: {
+                  trackId: tempId,
+                  status: 'SEEDING',
+                  progress: 1,
+                  localPath: magnet, // store magnet as path ref
+                  lastPlayed: Date.now(),
+                  addedAt: Date.now()
+              }
           }));
-          const p = await discoverLocalPeers();
-          setActivePeers(p);
-      }, 2000);
-      return () => clearInterval(interval);
-  }, [library, user]);
+
+          // We also need to add the track to the tracks list locally so it shows up in UI
+          const trackWithId = { ...newTrack, id: tempId } as Track;
+          setTracks(prev => [trackWithId, ...prev]);
+
+          alert("Import successful! Track saved to Vault and seeding to Swarm.");
+
+      } catch (err) {
+          console.error("Import Failed", err);
+          alert("Import failed. See console.");
+      }
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -486,70 +466,11 @@ function App() {
     }
   };
 
-  const handleEvictionCheck = async () => {
-    const deleted = await runSmartEviction(library, tracks, storageConfig, usageMB);
-    if (deleted.length > 0) {
-        setLibrary(prev => {
-            const next = { ...prev };
-            deleted.forEach(id => delete next[id]);
-            return next;
-        });
-        alert(`Smart Eviction ran! Freed space by deleting ${deleted.length} tracks.`);
-        setUsageMB(u => Math.max(0, u - (deleted.length * 5)));
-    }
-  };
-
   const handlePostSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!newPostContent.trim() || !user) return;
       await publishPost(user.username, newPostContent, currentTrack?.id);
       setNewPostContent('');
-  };
-
-  const handleIdentifiedUpload = async (file: File, metadata: DetailedMetadata) => {
-      if (!user) return;
-      setUploadStatus('Initializing Phase 2 Engine...');
-      
-      try {
-          const analysis = await analyzeAudio(file);
-          
-          setUploadStatus('Normalizing Audio (-1dB)...');
-          const processedBlob = await normalizeAndTranscode(analysis.buffer);
-          const processedFile = new File([processedBlob], `${metadata.artist} - ${metadata.title}.wav`, { type: 'audio/wav' });
-
-          setUploadStatus('Cryptographic Signing...');
-          const signature = await signUpload(processedFile, `hash_${analysis.fingerprint}`);
-
-          setUploadStatus('Seeding to DHT...');
-          const magnet = await seedFile(processedFile, `[BitBeats] ${metadata.artist} - ${metadata.title}`);
-          
-          setUploadStatus(`Seeding Active! Magnet: ${magnet.substring(0, 20)}...`);
-          
-          const newTrack: Partial<Track> = {
-              mbid: metadata.mbid, 
-              title: metadata.title,
-              artist: metadata.artist,
-              album: metadata.album,
-              coverUrl: metadata.coverUrl,
-              duration: analysis.duration,
-              audioUrl: magnet,
-              license: 'CC-BY',
-              size: processedFile.size / 1024 / 1024,
-              tags: metadata.tags || ['p2p', 'upload'],
-              bpm: 120, 
-              networkHealth: 100,
-              artistSignature: signature
-          };
-
-          await publishTrackMetadata(newTrack);
-          alert("Track processed and published to the P2P Network!");
-          navigate('/library');
-          setUploadStatus('');
-
-      } catch (err) {
-          console.error(err);
-          setUploadStatus('Seeding failed.');
-      }
   };
 
   const NavItem = ({ path, icon: Icon, label }: { path: string, icon: any, label: string }) => {
@@ -651,12 +572,8 @@ function App() {
              <NavItem path="/swarm" icon={Users} label="Swarm Social" />
              
              <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-6 mb-3 px-4">My Collection</div>
-             <NavItem path="/library" icon={Library} label="The Vault" />
-             <NavItem path="/studio" icon={Mic2} label="Creator Studio" />
-             
-             {/* New Link for Metadata Resolver */}
-             <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-6 mb-3 px-4">Utilities</div>
-             <NavItem path="/identify" icon={Tag} label="Meta Resolver" />
+             <NavItem path="/library" icon={HardDrive} label="My Library" />
+             {/* Removed redundant links: Studio and Identify are now consolidated */}
            </nav>
            
            <div className="mt-auto pt-6 border-t border-white/10">
@@ -696,7 +613,7 @@ function App() {
                             <div className="text-center py-20 text-gray-500">
                                 <div className="mb-4 text-4xl">🕸️</div>
                                 <p>Waiting for peers...</p>
-                                <p className="text-sm">Be the first to seed content in the Studio!</p>
+                                <p className="text-sm">Be the first to seed content in your Library!</p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
@@ -723,10 +640,10 @@ function App() {
                      </div>
                 } />
 
-                {/* --- ARTIST DETAILS (NEW) --- */}
+                {/* --- ARTIST DETAILS --- */}
                 <Route path="/artist/:id" element={<ArtistPage onPlay={handlePlay} swarmTracks={tracks} />} />
                 
-                {/* --- ALBUM DETAILS (NEW) --- */}
+                {/* --- ALBUM DETAILS --- */}
                 <Route path="/album/:id" element={<AlbumPage onPlay={handlePlay} isPlaying={isPlaying} currentTrackId={currentTrack?.id} swarmTracks={tracks} />} />
 
                 {/* --- SEARCH RESULTS --- */}
@@ -966,73 +883,18 @@ function App() {
                      </div>
                 } />
 
-                {/* --- LIBRARY --- */}
+                {/* --- LIBRARY DASHBOARD (Consolidated Vault, Studio, Identify) --- */}
                 <Route path="/library" element={
-                     <div className="p-8 max-w-5xl mx-auto">
-                        <div className="flex items-center justify-between mb-6">
-                          <h1 className="text-3xl font-bold text-white">My Vault</h1>
-                          <div className="flex gap-2">
-                              <Button variant="secondary" onClick={handleEvictionCheck} title="Run Cleanup">
-                                  <Trash2 size={16} /> Cleanup
-                              </Button>
-                          </div>
-                        </div>
-                        <div className="bg-dark-surface rounded-xl p-6 mb-8 border border-white/5">
-                            <h3 className="text-sm font-bold text-gray-400 uppercase mb-4 flex items-center gap-2">
-                                <Settings size={14} /> Storage Configuration
-                            </h3>
-                            <div className="space-y-6">
-                                <div>
-                                    <div className="flex justify-between text-sm mb-2">
-                                        <span className="text-white">Max Storage: {storageConfig.maxUsageGB} GB</span>
-                                        <span className="text-gray-500">{Math.round((usageMB / (storageConfig.maxUsageGB * 1024)) * 100)}% Used</span>
-                                    </div>
-                                    <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                                        <div className="h-full bg-brand-500" style={{ width: `${(usageMB / (storageConfig.maxUsageGB * 1024)) * 100}%` }}></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                           {Object.values(library).map(entry => {
-                              const track = tracks.find(t => t.id === entry.trackId);
-                              if (!track) return null;
-                              return (
-                                <TrackRow 
-                                    key={track.id} 
-                                    track={track} 
-                                    entry={entry}
-                                    isPlaying={currentTrack?.id === track.id && isPlaying}
-                                    onPlay={() => handlePlay(track)}
-                                    onExport={() => exportTrack(track.id, track.title)}
-                                />
-                              );
-                           })}
-                        </div>
-                     </div>
+                     <LibraryDashboard 
+                        library={library} 
+                        tracks={tracks} 
+                        onImport={handleLocalImport} 
+                     />
                 } />
 
-                {/* --- STUDIO --- */}
-                <Route path="/studio" element={
-                     <div className="p-8 max-w-3xl mx-auto text-center">
-                         <div className="mb-8">
-                             <div className="w-20 h-20 bg-brand-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-brand-500/20">
-                                 <Mic2 size={32} className="text-brand-500" />
-                             </div>
-                             <h1 className="text-3xl font-bold text-white mb-2">Creator Studio</h1>
-                             <p className="text-gray-400">Upload your tracks. Phase 2 Audio Engine will fingerprint and normalize them.</p>
-                         </div>
-                         <UploadZone onSuccess={handleIdentifiedUpload} />
-                         {uploadStatus && (
-                            <div className="mt-8 p-4 bg-brand-500/10 border border-brand-500/20 rounded-xl text-brand-400 font-bold animate-pulse">
-                               {uploadStatus}
-                            </div>
-                         )}
-                     </div>
-                } />
-
-                {/* --- METADATA RESOLVER (NEW) --- */}
-                <Route path="/identify" element={<MetadataResolver />} />
+                {/* --- REDIRECTS FOR LEGACY ROUTES --- */}
+                <Route path="/studio" element={<div className="p-8 text-center text-gray-400">Moved to My Library. Redirecting...</div>} />
+                <Route path="/identify" element={<div className="p-8 text-center text-gray-400">Moved to My Library. Redirecting...</div>} />
 
             </Routes>
 

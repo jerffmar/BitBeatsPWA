@@ -24,6 +24,52 @@ export class IdentificationError extends Error {
 }
 
 /**
+ * Helper: Smartly selects the "Best" release from a list.
+ * Prioritizes: Albums > EPs > Singles, Official status, and Earliest Date.
+ */
+const getBestReleaseInfo = (releases: any[] = []) => {
+  if (!releases || releases.length === 0) {
+    return { title: 'Unknown Album', year: '' };
+  }
+
+  const best = releases.sort((a, b) => {
+    // 1. Type Priority (Album > EP > Single > Compilation)
+    const getScore = (r: any) => {
+      const type = r['release-group']?.['primary-type'] || '';
+      const secondary = r['release-group']?.['secondary-types'] || [];
+      
+      let score = 0;
+      if (type === 'Album') score += 10;
+      if (type === 'EP') score += 5;
+      if (type === 'Single') score += 1; // Singles are low priority for "Album" field
+      
+      // Penalize Compilations/Live unless they are the only option
+      if (secondary.includes('Compilation') || secondary.includes('Live')) score -= 2;
+      
+      // 2. Status Priority
+      if (r.status === 'Official') score += 2;
+      
+      return score;
+    };
+
+    const scoreA = getScore(a);
+    const scoreB = getScore(b);
+
+    if (scoreA !== scoreB) return scoreB - scoreA; // Higher score first
+
+    // 3. Date Priority (Prefer older/original releases)
+    const dateA = a.date || '9999';
+    const dateB = b.date || '9999';
+    return dateA.localeCompare(dateB);
+  })[0];
+
+  return {
+    title: best.title,
+    year: best.date?.substring(0, 4) || ''
+  };
+};
+
+/**
  * Cleans filename by removing common track prefixes.
  * Examples: 
  * "01. Song.mp3" -> "Song"
@@ -135,12 +181,14 @@ export const identifyAudioFile = async (
         const best = data.results.sort((a: any, b: any) => b.score - a.score)[0];
         if (best.score > 0.8 && best.recordings?.[0]) {
             const rec = best.recordings[0];
+            const bestRelease = getBestReleaseInfo(rec.releases);
+            
             acoustIdResult = {
                 title: rec.title,
                 artist: rec.artists?.[0]?.name || 'Unknown',
-                album: rec.releases?.[0]?.title || 'Unknown',
+                album: bestRelease.title,
                 mbid: rec.id,
-                year: rec.releases?.[0]?.date?.substring(0, 4) || '',
+                year: bestRelease.year,
                 score: best.score
             };
         }
@@ -250,12 +298,16 @@ const attemptFuzzyMatch = async (file: File, fileDuration: number): Promise<Iden
 
     if (bestCandidate && highestConfidence > 0.4) {
         console.log(`✅ Fuzzy Match Found: ${bestCandidate.title} (${(highestConfidence*100).toFixed(0)}%)`);
+        
+        // Use intelligent release picker
+        const bestRelease = getBestReleaseInfo(bestCandidate.releases);
+
         return {
             mbid: bestCandidate.id,
             title: bestCandidate.title,
             artist: bestCandidate['artist-credit']?.[0]?.name || 'Unknown',
-            album: bestCandidate.releases?.[0]?.title || 'Unknown',
-            year: bestCandidate.releases?.[0]?.date?.substring(0, 4) || '',
+            album: bestRelease.title,
+            year: bestRelease.year,
             coverUrl: 'https://images.unsplash.com/photo-1619983081563-430f63602796?q=80&w=300', // Fallback
             score: highestConfidence,
             methodUsed: 'fuzzy',

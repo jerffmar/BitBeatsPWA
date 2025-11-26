@@ -24,6 +24,50 @@ interface FilenameParseResult {
 }
 
 /**
+ * Helper: Smartly selects the "Best" release from a list.
+ * Prioritizes: Albums > EPs > Singles, Official status, and Earliest Date.
+ */
+const getBestReleaseInfo = (releases: any[] = []) => {
+  if (!releases || releases.length === 0) {
+    return { title: 'Unknown Album', year: '' };
+  }
+
+  const best = releases.sort((a, b) => {
+    // 1. Type Priority (Album > EP > Single > Compilation)
+    const getScore = (r: any) => {
+      const type = r['release-group']?.['primary-type'] || '';
+      const secondary = r['release-group']?.['secondary-types'] || [];
+      
+      let score = 0;
+      if (type === 'Album') score += 10;
+      if (type === 'EP') score += 5;
+      if (type === 'Single') score += 1;
+      
+      if (secondary.includes('Compilation') || secondary.includes('Live')) score -= 2;
+      
+      if (r.status === 'Official') score += 2;
+      
+      return score;
+    };
+
+    const scoreA = getScore(a);
+    const scoreB = getScore(b);
+
+    if (scoreA !== scoreB) return scoreB - scoreA; 
+
+    // 3. Date Priority (Prefer older)
+    const dateA = a.date || '9999';
+    const dateB = b.date || '9999';
+    return dateA.localeCompare(dateB);
+  })[0];
+
+  return {
+    title: best.title,
+    year: best.date?.substring(0, 4) || ''
+  };
+};
+
+/**
  * Cleans filename by removing common track prefixes.
  */
 const cleanFilename = (filename: string) => {
@@ -132,15 +176,17 @@ export const identifyTrack = async (file: File, durationSec: number): Promise<Ma
     }
 
     // Calculate Final Weighted Score
-    // Title: 40%, Artist: 30%, Duration: 30%
     const finalScore = (titleSim * 0.40) + (artistSim * 0.30) + (durationScore * 0.30);
+    
+    // Select Best Release
+    const bestRelease = getBestReleaseInfo(rec.releases);
 
     return {
       mbid: rec.id,
       title: rec.title,
       artist: recArtist,
-      album: rec.releases?.[0]?.title || 'Unknown Album',
-      year: rec.releases?.[0]?.date?.substring(0, 4) || '',
+      album: bestRelease.title,
+      year: bestRelease.year,
       confidence: Math.round(finalScore * 100),
       matchDetails: {
         titleScore: Math.round(titleSim * 100),
