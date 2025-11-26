@@ -64,19 +64,20 @@ export const likeService = {
     },
 
     /**
-     * Fetches the preview list (top 9 recent) for the widgets.
+     * Fetches the preview list (top 4 recent) for the widgets.
      */
     getLikedPreview: async (userId: string, type: 'artist' | 'album' | 'track') => {
         const key = getStorageKey(userId, type);
         const stored = localStorage.getItem(key);
         const items: LikedItem[] = stored ? JSON.parse(stored) : [];
 
-        // Sort by recency (just in case)
+        // Sort by recency
         items.sort((a, b) => b.addedAt - a.addedAt);
 
         return {
             total: items.length,
-            preview: items.slice(0, 9)
+            // Widget now uses a 2x2 grid, so we need 4 items max
+            preview: items.slice(0, 4)
         };
     },
 

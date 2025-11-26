@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   HardDrive, Mic2, Disc, Music, List, Upload, CheckCircle, 
   AlertCircle, Loader, FileAudio, Database, Server, Layers,
-  ChevronRight, Heart
+  ChevronRight, Folder, FolderOpen
 } from 'lucide-react';
 import { Track, LibraryEntry, LikedItem } from '../types';
 import { useTrackIdentifier } from '../hooks/useTrackIdentifier';
@@ -121,74 +121,62 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
   };
 
+  /**
+   * Widget Design: "Folder Preview"
+   * Displays a 2x2 grid of the top 4 items.
+   * Acts as a big button to navigate to the specific library page.
+   */
   const LibraryWidget = ({ 
-      title, icon: Icon, total, items, type 
+      title, icon: Icon, total, items, path
   }: { 
-      title: string, icon: any, total: number, items: LikedItem[], type: 'artist'|'album'|'track' 
+      title: string, icon: any, total: number, items: LikedItem[], path: string
   }) => {
       
-      const handleItemClick = (item: LikedItem) => {
-          if (type === 'artist') navigate(`/artist/${item.entityId}`);
-          if (type === 'album') navigate(`/album/${item.entityId}`);
-          if (type === 'track') {
-             // For tracks, we ideally want to play it, but navigation is safer if it's not in the playlist
-             // Let's search for it or go to album. 
-             // For now, let's just trigger a search for the track title
-             navigate(`/search?type=SONG&q=${encodeURIComponent(item.title)}`);
-          }
-      };
-
-      const handleMore = () => {
-          let searchType = 'ALL';
-          if (type === 'artist') searchType = 'ARTIST';
-          if (type === 'album') searchType = 'ALBUM';
-          if (type === 'track') searchType = 'SONG';
-          navigate(`/search?type=${searchType}`); // In a real app, this would go to /library/artists
-      };
+      const gridItems = [...items];
+      // Fill remaining slots with nulls up to 4 to maintain grid structure
+      while(gridItems.length < 4) {
+          gridItems.push(null as any);
+      }
+      
+      // Take only top 4
+      const displayItems = gridItems.slice(0, 4);
 
       return (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col h-[340px]">
+          <div 
+            onClick={() => navigate(path)}
+            className="group bg-white/5 border border-white/10 rounded-2xl p-5 cursor-pointer hover:bg-white/10 hover:border-white/20 hover:scale-[1.02] transition-all duration-300 shadow-lg"
+          >
               <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2 text-brand-500 font-bold uppercase tracking-wider text-xs">
-                      <Icon size={16} /> {title}
+                  <div className="flex items-center gap-2 text-white font-bold text-sm">
+                      <div className="bg-brand-500/10 p-2 rounded-lg text-brand-500">
+                        <Icon size={18} /> 
+                      </div>
+                      {title}
                   </div>
-                  <span className="text-gray-500 text-xs font-mono bg-white/5 px-2 py-0.5 rounded">{total}</span>
+                  <span className="text-gray-500 text-xs font-mono bg-black/20 px-2 py-1 rounded">{total}</span>
               </div>
               
-              <div className="flex-1">
-                  {items.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
-                          <Heart size={32} className="mb-2 text-gray-600" />
-                          <p className="text-sm text-gray-400">No favorites yet.</p>
-                          <button onClick={() => navigate('/search')} className="text-xs text-brand-500 mt-2 hover:underline">Start Exploring</button>
-                      </div>
-                  ) : (
-                      <div className="grid grid-cols-3 gap-2">
-                          {items.map(item => (
-                              <div 
-                                key={item.entityId} 
-                                onClick={() => handleItemClick(item)}
-                                className="aspect-square bg-gray-800 rounded-lg overflow-hidden relative group cursor-pointer border border-white/5 hover:border-brand-500/50 transition-colors"
-                              >
-                                  <img src={item.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                      <div className="text-[10px] text-white font-bold text-center px-1 truncate w-full">{item.title}</div>
-                                  </div>
+              {/* 2x2 Folder Grid */}
+              <div className="aspect-square bg-black/20 rounded-xl overflow-hidden p-1 grid grid-cols-2 gap-0.5 border border-white/5 relative">
+                  {displayItems.map((item, i) => (
+                      <div key={i} className="bg-white/5 w-full h-full overflow-hidden relative first:rounded-tl-lg second:rounded-tr-lg third:rounded-bl-lg fourth:rounded-br-lg">
+                          {item ? (
+                              <img src={item.coverUrl} className="w-full h-full object-cover" alt="" />
+                          ) : (
+                              <div className="w-full h-full flex items-center justify-center opacity-10">
+                                  <Icon size={24} />
                               </div>
-                          ))}
-                          {/* Fill empty slots if less than 9 but more than 0 */}
-                          {Array.from({ length: Math.max(0, 9 - items.length) }).map((_, i) => (
-                              <div key={`empty-${i}`} className="aspect-square bg-white/5 rounded-lg border border-white/5 border-dashed"></div>
-                          ))}
+                          )}
                       </div>
-                  )}
+                  ))}
+                  
+                  {/* Hover Overlay */}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px]">
+                      <div className="bg-brand-500 text-black px-4 py-2 rounded-full font-bold text-xs shadow-xl flex items-center gap-1">
+                          Open <ChevronRight size={12} />
+                      </div>
+                  </div>
               </div>
-
-              {total > 9 && (
-                  <button onClick={handleMore} className="w-full mt-4 py-2 flex items-center justify-center gap-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
-                      View All <ChevronRight size={12} />
-                  </button>
-              )}
           </div>
       );
   };
@@ -211,28 +199,34 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
         <div className="p-8 max-w-7xl mx-auto w-full space-y-8">
             
             {/* Library Widgets Grid (Likes) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <LibraryWidget 
                     title="Artists" 
                     icon={Mic2} 
                     total={likedArtists.total} 
                     items={likedArtists.preview} 
-                    type="artist"
+                    path="/library/artists"
                 />
                 <LibraryWidget 
                     title="Albums" 
                     icon={Disc} 
                     total={likedAlbums.total} 
                     items={likedAlbums.preview} 
-                    type="album"
+                    path="/library/albums"
                 />
                 <LibraryWidget 
                     title="Songs" 
                     icon={Music} 
                     total={likedTracks.total} 
                     items={likedTracks.preview} 
-                    type="track"
+                    path="/library/tracks"
                 />
+                {/* Placeholder Playlist Widget */}
+                 <div className="group bg-white/5 border border-white/10 border-dashed rounded-2xl p-5 cursor-not-allowed opacity-60 flex flex-col justify-center items-center text-center h-[340px] md:h-auto">
+                    <List size={32} className="mb-2 text-gray-500" />
+                    <h3 className="text-white font-bold text-sm">Playlists</h3>
+                    <p className="text-xs text-gray-500">Coming Soon</p>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

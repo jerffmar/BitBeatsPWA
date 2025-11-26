@@ -27,6 +27,9 @@ import { AlbumPage } from './pages/AlbumPage';
 import { LibraryDashboard } from './pages/LibraryDashboard';
 import { DiscoveryPage } from './pages/DiscoveryPage';
 import { LikeButton } from './components/LikeButton';
+import { LibraryArtists } from './pages/LibraryArtists';
+import { LibraryAlbums } from './pages/LibraryAlbums';
+import { LibraryTracks } from './pages/LibraryTracks';
 
 // --- Components ---
 
@@ -154,6 +157,7 @@ function App() {
   const [activeParties, setActiveParties] = useState<ListenParty[]>([]);
   
   const [newPostContent, setNewPostContent] = useState('');
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -189,6 +193,30 @@ function App() {
         if (session) setUser(session);
     });
   }, []);
+
+  // --- PWA Install Prompt ---
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((choiceResult: any) => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted the install prompt');
+        } else {
+          console.log('User dismissed the install prompt');
+        }
+        setDeferredPrompt(null);
+      });
+    }
+  };
 
   // --- Search Deep Linking ---
   useEffect(() => {
@@ -634,6 +662,20 @@ function App() {
            </nav>
            
            <div className="mt-auto pt-6 border-t border-white/10">
+              {deferredPrompt && (
+                <div className="mb-4">
+                  <button 
+                    onClick={handleInstallClick}
+                    className="w-full bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg p-3 text-left transition-colors group"
+                  >
+                    <div className="flex items-center gap-2 text-brand-500 font-bold text-sm mb-1 group-hover:text-brand-400">
+                      <Download size={16} /> Install App
+                    </div>
+                    <p className="text-xs text-gray-400">Get the native desktop experience.</p>
+                  </button>
+                </div>
+              )}
+
               <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-4">
                  <div className="flex items-center gap-2 mb-2 text-white font-bold text-sm">
                     <Activity size={16} className="text-brand-500" /> LAN Sync
@@ -667,6 +709,12 @@ function App() {
                 
                 {/* --- ALBUM DETAILS --- */}
                 <Route path="/album/:id" element={<AlbumPage onPlay={handlePlay} isPlaying={isPlaying} currentTrackId={currentTrack?.id} swarmTracks={tracks} />} />
+
+                {/* --- LIBRARY SUB-PAGES --- */}
+                <Route path="/library/artists" element={<LibraryArtists />} />
+                <Route path="/library/albums" element={<LibraryAlbums />} />
+                <Route path="/library/tracks" element={<LibraryTracks onPlay={handlePlay} />} />
+                <Route path="/library/playlists" element={<div className="p-8 text-white">Playlists Coming Soon</div>} />
 
                 {/* --- SEARCH RESULTS --- */}
                 <Route path="/search" element={
@@ -822,8 +870,8 @@ function App() {
 
                 {/* --- SWARM --- */}
                 <Route path="/swarm" element={
-                     <div className="p-8 max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-                         <div className="lg:col-span-2">
+                     <div className="p-8 max-w-4xl mx-auto">
+                         <div>
                              <h2 className="text-2xl font-bold text-white mb-6">Active Listen Parties</h2>
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                                  {activeParties.length === 0 && (
@@ -882,22 +930,6 @@ function App() {
                                              <span className="text-xs text-gray-500">{new Date(post.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                          </div>
                                          <p className="text-gray-300 text-sm">{post.content}</p>
-                                     </div>
-                                 ))}
-                             </div>
-                         </div>
-                         <div className="bg-dark-surface rounded-2xl p-6 border border-white/5 h-fit">
-                             <h3 className="font-bold text-white mb-4">Friends Online</h3>
-                             <div className="space-y-3">
-                                 {[1,2,3].map(i => (
-                                     <div key={i} className="flex items-center gap-3">
-                                         <div className="w-8 h-8 rounded-full bg-gray-700 relative">
-                                             <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-dark-surface"></div>
-                                         </div>
-                                         <div className="flex-1">
-                                             <p className="text-sm text-white font-medium">User_{Math.floor(Math.random()*999)}</p>
-                                             <p className="text-xs text-gray-500">Listening to Synthwave...</p>
-                                         </div>
                                      </div>
                                  ))}
                              </div>
