@@ -10,6 +10,17 @@ const BASE_URL = 'https://musicbrainz.org/ws/2';
 const COVER_ART_BASE = 'https://coverartarchive.org';
 const USER_AGENT = 'BitBeats/2.0.0 ( contact@bitbeats.p2p )';
 
+export interface MBRecording {
+    id: string;
+    score: number; // Lucene search score (not our internal confidence)
+    title: string;
+    length?: number; // duration in ms
+    artist: string;
+    album: string;
+    year: string;
+    releases?: any[];
+}
+
 export interface SearchResults {
     songs: GlobalCatalogEntry[];
     albums: GlobalCatalogEntry[];
@@ -31,7 +42,52 @@ const getHeaders = () => ({
     'User-Agent': USER_AGENT
 });
 
-// --- SEARCH ---
+/**
+ * Searches specifically for recordings using advanced Lucene syntax.
+ * Used by the MetadataMatcher service.
+ */
+export const searchRecordings = async (query: string, artist?: string): Promise<MBRecording[]> => {
+    try {
+        // Construct Lucene Query
+        // Syntax: recording:"Title" AND artist:"Artist"
+        let luceneQuery = `recording:"${query.replace(/"/g, '\\"')}"`;
+        if (artist) {
+            luceneQuery += ` AND artist:"${artist.replace(/"/g, '\\"')}"`;
+        }
+
+        const encodedQuery = encodeURIComponent(luceneQuery);
+        const url = `${BASE_URL}/recording?query=${encodedQuery}&limit=15&fmt=json`;
+
+        const res = await fetch(url, { headers: getHeaders() });
+        
+        if (res.status === 503) {
+            throw new Error("MusicBrainz Rate Limit Exceeded. Please slow down.");
+        }
+        
+        if (!res.ok) {
+            throw new Error(`MusicBrainz API Error: ${res.statusText}`);
+        }
+
+        const data = await res.json();
+
+        return (data.recordings || []).map((rec: any) => ({
+            id: rec.id,
+            score: rec.score,
+            title: rec.title,
+            length: rec.length, // ms
+            artist: rec['artist-credit']?.[0]?.name || 'Unknown',
+            album: rec.releases?.[0]?.title || 'Unknown Album',
+            year: rec.releases?.[0]?.date?.substring(0, 4) || '',
+            releases: rec.releases
+        }));
+
+    } catch (err) {
+        console.error("MB Search Error:", err);
+        throw err; // Propagate to UI
+    }
+};
+
+// --- LEGACY/GENERAL SEARCH (Used by Search Bar) ---
 
 export const searchGlobalCatalog = async (
     query: string, 

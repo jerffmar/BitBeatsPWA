@@ -23,6 +23,7 @@ import { identifyTrack } from './services/identification';
 import { AuthScreen } from './AuthScreen';
 import { getSession, logout } from './services/auth';
 import { UploadZone } from './components/UploadZone';
+import { MetadataResolver } from './components/MetadataResolver';
 import { ArtistPage } from './pages/ArtistPage';
 import { AlbumPage } from './pages/AlbumPage';
 import { MOCK_ALBUMS } from './services/mockCatalog';
@@ -655,6 +656,10 @@ function App() {
              <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-6 mb-3 px-4">My Collection</div>
              <NavItem path="/library" icon={Library} label="The Vault" />
              <NavItem path="/studio" icon={Mic2} label="Creator Studio" />
+             
+             {/* New Link for Metadata Resolver */}
+             <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-6 mb-3 px-4">Utilities</div>
+             <NavItem path="/identify" icon={Tag} label="Meta Resolver" />
            </nav>
            
            <div className="mt-auto pt-6 border-t border-white/10">
@@ -1028,6 +1033,9 @@ function App() {
                          )}
                      </div>
                 } />
+
+                {/* --- METADATA RESOLVER (NEW) --- */}
+                <Route path="/identify" element={<MetadataResolver />} />
 
             </Routes>
 
