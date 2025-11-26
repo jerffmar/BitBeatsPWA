@@ -8,9 +8,7 @@ export default defineConfig({
     react(),
     // Copy fpcalc.wasm to the server root so fpcalc-browser can fetch "/fpcalc.wasm"
     viteStaticCopy({
-      targets: [
-        { src: 'node_modules/fpcalc-browser/dist/fpcalc.wasm', dest: '.' }
-      ]
+      targets: [{ src: 'node_modules/fpcalc-browser/dist/fpcalc.wasm', dest: '.' }]
     })
   ],
   base: '/',
@@ -23,7 +21,14 @@ export default defineConfig({
     }
   },
   server: {
-    host: true
+    host: true,
+    // Proxy API calls to backend during dev
+    proxy: {
+      '/api': {
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
+        changeOrigin: true
+      }
+    }
   },
   // Specific config for WASM libraries like fpcalc-browser or chromaprint-js
   assetsInclude: ['**/*.wasm'],
