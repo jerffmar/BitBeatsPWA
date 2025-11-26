@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { 
   Play, Pause, SkipForward, SkipBack, Search, Library, 
   Wifi, HardDrive, Share2, Download, Radio, Volume2, User, 
@@ -184,6 +185,15 @@ function App() {
         if (session) setUser(session);
     });
   }, []);
+
+  // --- Search Deep Linking ---
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const type = params.get('type');
+    if (type && ['ALL','SONG','ALBUM','ARTIST'].includes(type)) {
+       setSearchFilter(type as any);
+    }
+  }, [location.search]);
 
   // --- Initialization ---
   useEffect(() => {
@@ -573,7 +583,6 @@ function App() {
              
              <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-6 mb-3 px-4">My Collection</div>
              <NavItem path="/library" icon={HardDrive} label="My Library" />
-             {/* Removed redundant links: Studio and Identify are now consolidated */}
            </nav>
            
            <div className="mt-auto pt-6 border-t border-white/10">
@@ -893,8 +902,8 @@ function App() {
                 } />
 
                 {/* --- REDIRECTS FOR LEGACY ROUTES --- */}
-                <Route path="/studio" element={<div className="p-8 text-center text-gray-400">Moved to My Library. Redirecting...</div>} />
-                <Route path="/identify" element={<div className="p-8 text-center text-gray-400">Moved to My Library. Redirecting...</div>} />
+                <Route path="/studio" element={<Navigate to="/library" replace />} />
+                <Route path="/identify" element={<Navigate to="/library" replace />} />
 
             </Routes>
 

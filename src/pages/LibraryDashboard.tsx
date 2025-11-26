@@ -1,9 +1,9 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   HardDrive, Mic2, Disc, Music, List, Upload, CheckCircle, 
-  AlertCircle, Loader, FileAudio, Database, Server, ChevronRight,
-  PieChart, Layers
+  AlertCircle, Loader, FileAudio, Database, Server, Layers
 } from 'lucide-react';
 import { Track, LibraryEntry } from '../types';
 import { useTrackIdentifier } from '../hooks/useTrackIdentifier';
@@ -38,7 +38,7 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
       artists: uniqueArtists,
       albums: uniqueAlbums,
       songs: libraryTrackIds.length,
-      playlists: 0 // Placeholder
+      playlists: 0 // Placeholder for future feature
     });
   }, [library, tracks]);
 
@@ -52,7 +52,7 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
         });
       });
     }
-  }, [library]); // Update when library changes
+  }, [library]);
 
   // --- Drag & Drop Handlers ---
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -165,7 +165,7 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
-                {/* Main Content Area (Recent Files Preview could go here) */}
+                {/* Main Content Area */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="flex items-center justify-between">
                          <h2 className="text-xl font-bold text-white">Quick Actions</h2>
@@ -290,7 +290,7 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
                         </div>
                     </div>
 
-                    {/* Mini Recent List Placeholder */}
+                    {/* Mini Recent List */}
                     <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
                         <h3 className="font-bold text-white mb-4 text-sm uppercase tracking-wider">Recent Imports</h3>
                         <div className="space-y-3">
@@ -300,7 +300,7 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
                                  return (
                                      <div key={idx} className="flex items-center gap-3 group cursor-pointer hover:bg-white/5 p-2 -mx-2 rounded-lg transition-colors">
                                          <div className="w-8 h-8 rounded bg-gray-800 overflow-hidden">
-                                             <img src={track.coverUrl} className="w-full h-full object-cover" />
+                                             <img src={track.coverUrl} className="w-full h-full object-cover" alt={track.title} />
                                          </div>
                                          <div className="min-w-0 flex-1">
                                              <div className="text-sm text-white truncate font-medium">{track.title}</div>
