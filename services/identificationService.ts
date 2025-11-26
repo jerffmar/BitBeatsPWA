@@ -1,8 +1,5 @@
 import { calculateSimilarity } from '../utils/stringDistance';
 
-// Toggle this to FALSE when actual backend and WASM are ready
-const USE_MOCK = true;
-
 const ACOUSTID_API_KEY = '8XaBELgH'; // Public demo key
 const MB_API_BASE = 'https://musicbrainz.org/ws/2';
 
@@ -62,20 +59,15 @@ export const identifyAudioFile = async (
   let duration = 0;
 
   try {
-    if (USE_MOCK) {
-       await new Promise(r => setTimeout(r, 800)); // Simulate WASM
-       duration = 245; // seconds
-       fingerprint = 'mock_fingerprint_hash_abc123';
-    } else {
-        // @ts-ignore
-        const fpcalc = await import('fpcalc-browser');
-        const result = await fpcalc.calculate(file);
-        duration = result.duration;
-        fingerprint = result.fingerprint;
-    }
+    // Dynamic import to support optional installation of the heavy WASM library
+    // @ts-ignore
+    const fpcalc = await import('fpcalc-browser');
+    const result = await fpcalc.calculate(file);
+    duration = result.duration;
+    fingerprint = result.fingerprint;
   } catch (err) {
-    console.warn("Fingerprinting failed, skipping to fuzzy match immediately.");
-    // If fingerprinting fails entirely (e.g. WASM error), skip to Fuzzy
+    console.warn("Fingerprinting skipped (fpcalc-browser missing or error). Falling back to Fuzzy Match.");
+    // If fingerprinting fails entirely (e.g. library missing), skip to Fuzzy
     return attemptFuzzyMatch(file, 0); 
   }
 
@@ -85,31 +77,15 @@ export const identifyAudioFile = async (
   try {
     let internalResult = null;
     
-    if (USE_MOCK) {
-       // Simulate 30% Cache Hit
-       await new Promise(r => setTimeout(r, 600)); 
-       if (Math.random() < 0.3) {
-           internalResult = {
-               mbid: 'internal-db-id-123',
-               title: 'Cached Song',
-               artist: 'Cached Artist',
-               album: 'Cached Album',
-               year: '2023',
-               coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=300',
-               tags: ['cached']
-           };
-       }
-    } else {
-       // Real Backend Call
-       const res = await fetch('/api/identify', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ fingerprint, duration })
-       });
-       if (res.ok) {
-           const json = await res.json();
-           if (json.success) internalResult = json.data;
-       }
+    // Real Backend Call
+    const res = await fetch('/api/identify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fingerprint, duration })
+    });
+    if (res.ok) {
+        const json = await res.json();
+        if (json.success) internalResult = json.data;
     }
 
     if (internalResult) {
@@ -132,39 +108,24 @@ export const identifyAudioFile = async (
   try {
      let acoustIdResult = null;
 
-     if (USE_MOCK) {
-        // Simulate 50% AcoustID Hit if DB missed
-        await new Promise(r => setTimeout(r, 1000));
-        if (Math.random() < 0.5) {
+    const url = `https://api.acoustid.org/v2/lookup?client=${ACOUSTID_API_KEY}&meta=recordings+releases&duration=${Math.floor(duration)}&fingerprint=${fingerprint}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    
+    if (data.results && data.results.length > 0) {
+        const best = data.results.sort((a: any, b: any) => b.score - a.score)[0];
+        if (best.score > 0.8 && best.recordings?.[0]) {
+            const rec = best.recordings[0];
             acoustIdResult = {
-                title: 'Midnight City',
-                artist: 'M83',
-                album: 'Hurry Up, We\'re Dreaming',
-                mbid: '5b113466-2e9d-4790-b146-4277d337a5c8',
-                year: '2011',
-                score: 0.95
+                title: rec.title,
+                artist: rec.artists?.[0]?.name || 'Unknown',
+                album: rec.releases?.[0]?.title || 'Unknown',
+                mbid: rec.id,
+                year: rec.releases?.[0]?.date?.substring(0, 4) || '',
+                score: best.score
             };
         }
-     } else {
-        const url = `https://api.acoustid.org/v2/lookup?client=${ACOUSTID_API_KEY}&meta=recordings+releases&duration=${Math.floor(duration)}&fingerprint=${fingerprint}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        
-        if (data.results && data.results.length > 0) {
-            const best = data.results.sort((a: any, b: any) => b.score - a.score)[0];
-            if (best.score > 0.8 && best.recordings?.[0]) {
-                const rec = best.recordings[0];
-                acoustIdResult = {
-                    title: rec.title,
-                    artist: rec.artists?.[0]?.name || 'Unknown',
-                    album: rec.releases?.[0]?.title || 'Unknown',
-                    mbid: rec.id,
-                    year: rec.releases?.[0]?.date?.substring(0, 4) || '',
-                    score: best.score
-                };
-            }
-        }
-     }
+    }
 
      if (acoustIdResult) {
          console.log("✅ AcoustID Hit!");
@@ -202,27 +163,12 @@ const attemptFuzzyMatch = async (file: File, fileDuration: number): Promise<Iden
 
     let mbCandidates: any[] = [];
 
-    if (USE_MOCK) {
-        await new Promise(r => setTimeout(r, 1000));
-        // Mock a successful fuzzy match
-        if (title.toLowerCase().includes('sunset')) {
-             mbCandidates = [{
-                 id: 'fuzzy-mbid-789',
-                 title: 'Sunset',
-                 score: 100,
-                 'artist-credit': [{ name: 'The Midnight' }],
-                 releases: [{ title: 'Endless Summer', date: '2016-08-05' }],
-                 length: 245000 // ms
-             }];
-        }
-    } else {
-        try {
-            const res = await fetch(url, { headers: { 'User-Agent': 'BitBeats/2.0' } });
-            const data = await res.json();
-            mbCandidates = data.recordings || [];
-        } catch (e) {
-            throw new IdentificationError("MusicBrainz API unreachable.");
-        }
+    try {
+        const res = await fetch(url, { headers: { 'User-Agent': 'BitBeats/2.0' } });
+        const data = await res.json();
+        mbCandidates = data.recordings || [];
+    } catch (e) {
+        throw new IdentificationError("MusicBrainz API unreachable.");
     }
 
     // Rank Candidates

@@ -8,7 +8,10 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     target: 'esnext', // Required for Top-level await and advanced Storage APIs
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      external: ['fpcalc-browser']
+    }
   },
   server: {
     host: true

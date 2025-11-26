@@ -19,10 +19,10 @@ BitBeats is a Proof-of-Concept (PoC) Progressive Web App (PWA) demonstrating a d
 - **Network Health:** Visual indicators showing how "rare" or "common" a track is in the swarm.
 
 ### 3. Smart Metadata Matching (New)
-- **Fuzzy Logic Resolver:** Replaces heavy audio fingerprinting with a lightweight, intelligent metadata matcher.
+- **Hybrid Identification Flow:** Combines Client-Side Fingerprinting (`fpcalc-browser`) with a robust fuzzy matcher fallback.
 - **Algorithm:** Uses **Levenshtein Distance** to fuzzy match filenames against the **MusicBrainz** global database.
 - **Weighted Scoring:** Calculates confidence scores based on Title (40%), Artist (30%), and Duration (30%) similarity.
-- **Real-time Lookup:** Fetches metadata directly from MusicBrainz API (Lucene) without relying on static mocks.
+- **Real-time Lookup:** Fetches metadata directly from MusicBrainz API (Lucene) and AcoustID without relying on static mocks.
 
 ### 4. Social Swarm (Powered by Gun.js)
 - **Decentralized Chat:** Swarm Chatter is now powered by **Gun.js**, a distributed graph database. Messages are propagated peer-to-peer without a central API server.
@@ -62,6 +62,7 @@ BitBeats is a Proof-of-Concept (PoC) Progressive Web App (PWA) demonstrating a d
 - [x] **Remove `MOCK_POSTS`:** Ensured the social feed pulls 100% of history from the mesh network.
 - [x] **Remove `discoverLocalPeers`:** Implemented actual Mesh peer discovery using Gun.js internal peer list.
 - [x] **Remove `signUpload`:** Replaced simulated delay with actual Ed25519 content signing logic using `Gun.SEA`.
+- [x] **Remove Identification Mocks:** Replaced simulated AcoustID checks with real API calls and fallback fuzzy logic (`services/identificationService.ts`).
 
 ### Phase 4: Platform (Future)
 - [ ] **Mobile Wrapper:** Wrap using Capacitor or Trusted Web Activities (TWA) to enable background audio support on iOS/Android.
@@ -74,6 +75,8 @@ BitBeats is a Proof-of-Concept (PoC) Progressive Web App (PWA) demonstrating a d
 npm install
 npm run dev
 ```
+
+**Note:** The `fpcalc-browser` package requires WASM support. Ensure your dev server serves `.wasm` files with the correct MIME type.
 
 ## 📄 License
 MIT
