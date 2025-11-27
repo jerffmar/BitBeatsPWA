@@ -1,6 +1,4 @@
 
-import { Track } from '../types';
-
 declare global {
   interface Window {
     WebTorrent: any;

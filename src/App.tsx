@@ -10,8 +10,7 @@ import {
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
-import { Track, LibraryEntry, UserStats, StorageConfig, User as UserType, SocialPost, GlobalCatalogEntry, Bounty, ListenParty } from './types';
-import { calculateRatio } from './services/mockData';
+import { Track, LibraryEntry, UserStats, StorageConfig, User as UserType, SocialPost, GlobalCatalogEntry, Bounty, ListenParty } from './types.ts';
 import { saveToVault, loadFromVault, checkVaultStatus, getStoredBytes, runSmartEviction, exportTrack, opfsSupported } from './services/storage.ts';
 import { getReputation, discoverLocalPeers, signUpload } from './services/p2pNetwork';
 import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties, publishTrackMetadata, subscribeToTracks, subscribeToParties, subscribeToCredits, createParty } from './services/db';

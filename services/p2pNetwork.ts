@@ -1,7 +1,6 @@
-
-import { UserStats } from '../types';
-import { getGun } from './db';
-import { getKeyPair } from './auth';
+import type { UserStats } from '../types.ts';
+import { getGun } from './db.ts';
+import { getKeyPair } from './auth.ts';
 
 /**
  * P2P NETWORK SERVICE
