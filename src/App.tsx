@@ -18,7 +18,6 @@ import { initTorrentClient, seedFile, addTorrent } from './services/torrent.ts';
 import { analyzeAudio, normalizeAndTranscode } from './services/audioEngine.ts';
 import { searchGlobalCatalog } from './services/musicBrainz.ts';
 import type { SearchResults, DetailedMetadata } from './services/musicBrainz.ts';
-import { identifyTrack } from './services/identification.ts';
 import { AuthScreen } from './AuthScreen.tsx';
 import { getSession, logout } from './services/auth.ts';
 import { ArtistPage } from './pages/ArtistPage.tsx';
