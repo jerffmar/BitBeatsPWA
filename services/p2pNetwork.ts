@@ -1,4 +1,4 @@
-import { UserStats } from '../types.ts';
+import type { UserStats } from '../types.ts';
 import { getGun } from './db.ts';
 import { getKeyPair } from './auth.ts';
 
