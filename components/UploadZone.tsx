@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect } from 'react';
-import { useTrackIdentifier } from '../hooks/useTrackIdentifier';
-import { DetailedMetadata } from '../services/musicBrainz';
+import { useTrackIdentifier } from '../hooks/useTrackIdentifier.ts';
+import { DetailedMetadata } from '../services/musicBrainz.ts';
 import { Upload, Music, CheckCircle, AlertTriangle, XCircle, Database, Search, Fingerprint } from 'lucide-react';
 
 interface UploadZoneProps {

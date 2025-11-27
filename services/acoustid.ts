@@ -1,5 +1,4 @@
-
-import { DetailedMetadata } from './musicBrainz';
+import { DetailedMetadata } from './musicBrainz.ts';
 
 // Toggle this to FALSE when actual fpcalc-browser and WASM files are installed
 const USE_MOCK = true;

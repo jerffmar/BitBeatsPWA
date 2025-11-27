@@ -1,4 +1,4 @@
-import { calculateSimilarity } from '../utils/stringDistance';
+import { calculateSimilarity } from '../utils/stringDistance.ts';
 
 const ACOUSTID_API_KEY = '8XaBELgH'; // Public demo key
 const MB_API_BASE = 'https://musicbrainz.org/ws/2';

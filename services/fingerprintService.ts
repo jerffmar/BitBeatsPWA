@@ -1,5 +1,4 @@
-
-import { DetailedMetadata } from './musicBrainz';
+import { DetailedMetadata } from './musicBrainz.ts';
 
 export interface IdentificationResult {
   title: string;

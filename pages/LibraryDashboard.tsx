@@ -5,10 +5,11 @@ import {
   AlertCircle, Loader, FileAudio, Database, Server, Layers,
   ChevronRight, Folder, FolderOpen
 } from 'lucide-react';
-import { Track, LibraryEntry, LikedItem } from '../types';
-import { useTrackIdentifier } from '../hooks/useTrackIdentifier';
-import { DetailedMetadata } from '../services/musicBrainz';
-import { likeService } from '../services/likeService';
+import { Track, LibraryEntry, LikedItem } from '../types.ts';
+import { useTrackIdentifier } from '../hooks/useTrackIdentifier.ts';
+import { DetailedMetadata } from '../services/musicBrainz.ts';
+import { likeService } from '../services/likeService.ts';
+import { CoverImage } from '../components/ui/CoverImage.tsx';
 
 interface LibraryDashboardProps {
   library: Record<string, LibraryEntry>;
