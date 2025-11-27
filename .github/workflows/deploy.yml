@@ -17,10 +17,20 @@ jobs:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
+          envs: REPO_URL,APP_DIR,DEFAULT_REPO,GIT_TOKEN
           script: |
             set -e
-            REPO_URL="${REPO_URL:-https://github.com/${GITHUB_REPOSITORY}.git}"
+            REPO_URL="${REPO_URL:-https://github.com/${DEFAULT_REPO}.git}"
             APP_DIR="${APP_DIR:-/opt/bitbeats}"
+            if [ -z "$REPO_URL" ] || [ "$REPO_URL" = "https://github.com/.git" ]; then
+              echo "REPO_URL is not set; provide secrets.REPO_URL or ensure DEFAULT_REPO is available."
+              exit 1
+            fi
+            if [ -n "$GIT_TOKEN" ]; then
+              AUTH_REPO_URL="${REPO_URL/https:\/\//https://$GIT_TOKEN@}"
+            else
+              AUTH_REPO_URL="$REPO_URL"
+            fi
             if ! command -v git >/dev/null 2>&1; then
               sudo apt-get update
               sudo apt-get install -y git
@@ -28,8 +38,9 @@ jobs:
             if [ ! -d "$APP_DIR/.git" ]; then
               sudo mkdir -p "$APP_DIR"
               sudo chown $USER:$USER "$APP_DIR"
-              git clone "$REPO_URL" "$APP_DIR"
+              git clone "$AUTH_REPO_URL" "$APP_DIR"
             else
+              git -C "$APP_DIR" remote set-url origin "$AUTH_REPO_URL"
               git -C "$APP_DIR" pull --ff-only
             fi
             cd "$APP_DIR"
@@ -37,3 +48,5 @@ jobs:
         env:
           REPO_URL: ${{ secrets.REPO_URL }}
           APP_DIR: ${{ secrets.APP_DIR }}
+          DEFAULT_REPO: ${{ github.repository }}
+          GIT_TOKEN: ${{ secrets.REPO_PAT }}
