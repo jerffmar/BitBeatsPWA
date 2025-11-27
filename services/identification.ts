@@ -1,4 +1,4 @@
-import { searchGlobalCatalog, lookupRecording, DetailedMetadata } from './musicBrainz';
+import { searchGlobalCatalog, SearchResults, DetailedMetadata } from './musicBrainz.ts';
 
 /**
  * IDENTIFICATION SERVICE
