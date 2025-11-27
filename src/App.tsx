@@ -12,23 +12,24 @@ import { twMerge } from 'tailwind-merge';
 
 import { Track, LibraryEntry, UserStats, StorageConfig, User as UserType, SocialPost, GlobalCatalogEntry, Bounty, ListenParty } from './types.ts';
 import { saveToVault, loadFromVault, checkVaultStatus, getStoredBytes, runSmartEviction, exportTrack, opfsSupported } from './services/storage.ts';
-import { discoverLocalPeers, signUpload } from './services/p2pNetwork.ts';
-import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties, publishTrackMetadata, subscribeToTracks, subscribeToParties, subscribeToCredits, createParty } from './services/db.ts';
-import { initTorrentClient, seedFile, addTorrent } from './services/torrent.ts';
-import { analyzeAudio, normalizeAndTranscode } from './services/audioEngine.ts';
+import { getReputation, discoverLocalPeers, signUpload } from './services/p2pNetwork';
+import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties, publishTrackMetadata, subscribeToTracks, subscribeToParties, subscribeToCredits, createParty } from './services/db';
+import { initTorrentClient, seedFile, addTorrent, getTorrentStats } from './services/torrent';
+import { analyzeAudio, normalizeAndTranscode } from './services/audioEngine';
 import { searchGlobalCatalog } from './services/musicBrainz.ts';
 import type { SearchResults, DetailedMetadata } from './services/musicBrainz.ts';
-import { AuthScreen } from './AuthScreen.tsx';
-import { getSession, logout } from './services/auth.ts';
-import { ArtistPage } from './pages/ArtistPage.tsx';
-import { AlbumPage } from './pages/AlbumPage.tsx';
-import { LibraryDashboard } from './pages/LibraryDashboard.tsx';
-import { DiscoveryPage } from './pages/DiscoveryPage.tsx';
-import { LikeButton } from './components/LikeButton.tsx';
-import { LibraryArtists } from './pages/LibraryArtists.tsx';
-import { LibraryAlbums } from './pages/LibraryAlbums.tsx';
-import { LibraryTracks } from './pages/LibraryTracks.tsx';
-import { CoverImage } from './components/ui/CoverImage.tsx';
+import { identifyTrack } from './services/identification';
+import { AuthScreen } from './AuthScreen';
+import { getSession, logout } from './services/auth';
+import { ArtistPage } from './pages/ArtistPage';
+import { AlbumPage } from './pages/AlbumPage';
+import { LibraryDashboard } from './pages/LibraryDashboard';
+import { DiscoveryPage } from './pages/DiscoveryPage';
+import { LikeButton } from './components/LikeButton';
+import { LibraryArtists } from './pages/LibraryArtists';
+import { LibraryAlbums } from './pages/LibraryAlbums';
+import { LibraryTracks } from './pages/LibraryTracks';
+import { CoverImage } from './components/ui/CoverImage';
 
 // --- Components ---
 
