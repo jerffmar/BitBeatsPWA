@@ -1,4 +1,4 @@
-import { SocialPost, Bounty, Track, ListenParty } from '../types.ts';
+import type { SocialPost, Bounty, Track, ListenParty } from '../types.ts';
 
 // Declare global Gun types since we load via script tag
 declare global {
