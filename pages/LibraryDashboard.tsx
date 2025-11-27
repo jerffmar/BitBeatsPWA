@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { Track, LibraryEntry, LikedItem } from '../types';
 import { useTrackIdentifier } from '../hooks/useTrackIdentifier';
-import { DetailedMetadata } from '../services/musicBrainz';
+import type { DetailedMetadata } from '../services/musicBrainz';
 import { likeService } from '../services/likeService';
 
 interface LibraryDashboardProps {

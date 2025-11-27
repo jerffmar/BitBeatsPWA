@@ -1,7 +1,6 @@
-
 import { useState, useCallback } from 'react';
 import { decodeAudio, generateFingerprint, lookupAcoustID, enrichMetadata, IdentificationResult } from '../services/fingerprintService';
-import { DetailedMetadata } from '../services/musicBrainz';
+import type { DetailedMetadata } from '../services/musicBrainz.ts';
 
 export type IdentificationStatus = 'idle' | 'decoding' | 'fingerprinting' | 'identifying' | 'success' | 'error';
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { 
@@ -18,7 +17,8 @@ import { getReputation, discoverLocalPeers, signUpload } from './services/p2pNet
 import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties, publishTrackMetadata, subscribeToTracks, subscribeToParties, subscribeToCredits, createParty } from './services/db';
 import { initTorrentClient, seedFile, addTorrent, getTorrentStats } from './services/torrent';
 import { analyzeAudio, normalizeAndTranscode } from './services/audioEngine';
-import { searchGlobalCatalog, SearchResults, DetailedMetadata } from './services/musicBrainz';
+import { searchGlobalCatalog } from './services/musicBrainz.ts';
+import type { SearchResults, DetailedMetadata } from './services/musicBrainz.ts';
 import { identifyTrack } from './services/identification';
 import { AuthScreen } from './AuthScreen';
 import { getSession, logout } from './services/auth';

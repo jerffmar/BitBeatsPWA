@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -8,7 +7,7 @@ import {
 } from 'lucide-react';
 import { Track, LibraryEntry, LikedItem } from '../types';
 import { useTrackIdentifier } from '../hooks/useTrackIdentifier';
-import { DetailedMetadata } from '../services/musicBrainz';
+import type { DetailedMetadata } from '../services/musicBrainz';
 import { likeService } from '../services/likeService';
 import { CoverImage } from '../components/ui/CoverImage';
 
