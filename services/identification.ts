@@ -1,4 +1,3 @@
-
 import { searchGlobalCatalog, lookupRecording, DetailedMetadata } from './musicBrainz';
 
 /**
@@ -19,36 +18,38 @@ export const identifyTrack = async (
     duration: number, 
     fingerprint: string
 ): Promise<DetailedMetadata | null> => {
-
     console.log(`🔍 Identifying: ${filename} (${duration}s)`);
 
-    // 1. Clean filename to get a search query
-    // "The_Beatles_-_Hey_Jude.mp3" -> "The Beatles Hey Jude"
     const query = filename
-        .replace(/\.[^/.]+$/, "") // Remove extension
+        .replace(/\.[^/.]+$/, "")
         .replace(/_/g, " ")
         .replace(/-/g, " ")
-        .replace(/\(.*?\)/g, "") // Remove things in brackets like (Official Video)
+        .replace(/\(.*?\)/g, "")
         .replace(/\[.*?\]/g, "")
         .trim();
 
-    // 2. Search MusicBrainz for a potential match
-    const results = await searchGlobalCatalog(query);
-    
-    // 3. Filter results by duration (fuzzy match +/- 5 seconds)
-    // AcoustID does this automatically. We do it manually here.
-    // Note: MusicBrainz search results don't always have duration, so we might just take the top hit
-    // that looks like a Song.
-    
-    const bestMatch = results.songs[0];
+    // --- Server-side search (fuzzy/Lucene done on API) ---
+    const searchRes = await fetch(`/api/search?query=${encodeURIComponent(query)}&type=recording`);
+    if (!searchRes.ok) {
+        console.warn("Server search failed.");
+        return null;
+    }
+    const searchData = await searchRes.json();
+    // Expect: { songs: [{ mbid, title, artist, album, year, coverUrl }] }
+    const bestMatch = searchData?.songs?.[0];
 
     if (!bestMatch) {
         console.warn("No metadata match found.");
         return null;
     }
 
-    // 4. Hydrate the result to get the Cover Art and Album details
-    const details = await lookupRecording(bestMatch.mbid);
-    
-    return details;
+    // --- Server-side hydration (cover art + album details) ---
+    const detailsRes = await fetch(`/api/recording/${bestMatch.mbid}`);
+    if (!detailsRes.ok) {
+        console.warn("Server recording lookup failed.");
+        return null;
+    }
+    const details = await detailsRes.json();
+
+    return details as DetailedMetadata;
 };
