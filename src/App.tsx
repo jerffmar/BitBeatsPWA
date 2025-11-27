@@ -14,7 +14,7 @@ import { Track, LibraryEntry, UserStats, StorageConfig, User as UserType, Social
 import { saveToVault, loadFromVault, checkVaultStatus, getStoredBytes, runSmartEviction, exportTrack, opfsSupported } from './services/storage.ts';
 import { getReputation, discoverLocalPeers, signUpload } from './services/p2pNetwork.ts';
 import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties, publishTrackMetadata, subscribeToTracks, subscribeToParties, subscribeToCredits, createParty } from './services/db.ts';
-import { initTorrentClient, seedFile, addTorrent, getTorrentStats } from './services/torrent.ts';
+import { initTorrentClient, seedFile, addTorrent } from './services/torrent.ts';
 import { analyzeAudio, normalizeAndTranscode } from './services/audioEngine.ts';
 import { searchGlobalCatalog } from './services/musicBrainz.ts';
 import type { SearchResults, DetailedMetadata } from './services/musicBrainz.ts';
