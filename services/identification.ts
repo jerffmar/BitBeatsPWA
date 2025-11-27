@@ -1,5 +1,4 @@
-import { searchGlobalCatalog } from './musicBrainz.ts';
-import type { SearchResults, DetailedMetadata } from './musicBrainz.ts';
+import type { DetailedMetadata } from './musicBrainz.ts';
 
 /**
  * IDENTIFICATION SERVICE
