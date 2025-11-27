@@ -17,7 +17,8 @@ import { getReputation, discoverLocalPeers, signUpload } from './services/p2pNet
 import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties, publishTrackMetadata, subscribeToTracks, subscribeToParties, subscribeToCredits, createParty } from './services/db.ts';
 import { initTorrentClient, seedFile, addTorrent, getTorrentStats } from './services/torrent.ts';
 import { analyzeAudio, normalizeAndTranscode } from './services/audioEngine.ts';
-import { searchGlobalCatalog, SearchResults, DetailedMetadata } from './services/musicBrainz.ts';
+import { searchGlobalCatalog } from './services/musicBrainz.ts';
+import type { SearchResults, DetailedMetadata } from './services/musicBrainz.ts';
 import { identifyTrack } from './services/identification.ts';
 import { AuthScreen } from './AuthScreen.tsx';
 import { getSession, logout } from './services/auth.ts';

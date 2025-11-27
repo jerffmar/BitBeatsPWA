@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { Track, LibraryEntry, LikedItem } from '../types.ts';
 import { useTrackIdentifier } from '../hooks/useTrackIdentifier.ts';
-import { DetailedMetadata } from '../services/musicBrainz.ts';
+import type { DetailedMetadata } from '../services/musicBrainz.ts';
 import { likeService } from '../services/likeService.ts';
 import { CoverImage } from '../components/ui/CoverImage.tsx';
 
