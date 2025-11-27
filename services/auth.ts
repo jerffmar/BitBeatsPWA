@@ -1,5 +1,4 @@
-
-import { User } from '../types';
+import { User } from '../types.ts';
 import { getGun } from './db';
 
 const STORAGE_KEY_PAIR = 'bitbeats_user_pair';
