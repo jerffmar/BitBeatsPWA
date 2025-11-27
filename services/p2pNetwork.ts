@@ -1,5 +1,4 @@
-
-import { UserStats } from '../types';
+import { UserStats } from '../types.ts';
 import { getGun } from './db';
 import { getKeyPair } from './auth';
 

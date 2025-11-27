@@ -1,5 +1,4 @@
-
-import { GlobalCatalogEntry } from '../types';
+import { GlobalCatalogEntry } from '../types.ts';
 
 /**
  * MUSICBRAINZ SERVICE (The Vitrine)
