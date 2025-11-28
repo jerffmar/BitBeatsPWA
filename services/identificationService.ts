@@ -1,4 +1,5 @@
 import { calculateSimilarity } from '../utils/stringDistance.ts';
+import { loadMusicMetadata } from "./musicMetadataLoader";
 
 const ACOUSTID_API_KEY = '8XaBELgH'; // Public demo key
 const MB_API_BASE = 'https://musicbrainz.org/ws/2';
@@ -347,7 +348,7 @@ const readEmbeddedTags = async (file: File): Promise<IdentificationResult | null
     // Dynamic import to avoid hard dependency when not installed
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    const mm = await import('music-metadata-browser');
+    const mm = await loadMusicMetadata();
     const metadata = await mm.parseBlob(file);
 
     const common = metadata?.common || {};

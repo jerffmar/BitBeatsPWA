@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-REPO_URL="${1:-https://example.com/your/BitBeats.git}"
+REPO_URL="${1:-https://github.com/jerffmar/BitBeatsPWA.git}"
 APP_DIR="${2:-/opt/bitbeats}"
 NODE_MAJOR=22
 
@@ -23,7 +23,12 @@ if ! command -v node >/dev/null 2>&1 || [[ "$(node -v 2>/dev/null || echo v0)" !
 fi
 
 echo "➡️  Configuring UFW..."
-ufw allow OpenSSH >/dev/null || true
+if ufw app info OpenSSH >/dev/null 2>&1; then
+  ufw allow OpenSSH >/dev/null || true
+else
+  echo "⚠️  UFW profile 'OpenSSH' not found, opening tcp/22 directly..."
+  ufw allow 22/tcp >/dev/null || true
+fi
 ufw allow 80 >/dev/null || true
 ufw allow 443 >/dev/null || true
 ufw --force enable
@@ -33,9 +38,22 @@ ss -tulpn
 
 echo "➡️  Preparing application directory at ${APP_DIR}..."
 if [ ! -d "${APP_DIR}" ]; then
-  git clone "${REPO_URL}" "${APP_DIR}"
-else
-  cd "${APP_DIR}"
+  if ! git clone "${REPO_URL}" "${APP_DIR}"; then
+    echo "❌  Failed to clone ${REPO_URL}. Pass a valid repository URL as the first argument."
+    exit 1
+  fi
+elif [ ! -d "${APP_DIR}/.git" ]; then
+  echo "❌  ${APP_DIR} exists but is not a git repository. Remove it or choose another APP_DIR."
+  exit 1
+fi
+
+cd "${APP_DIR}"
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  CURRENT_REMOTE="$(git remote get-url origin 2>/dev/null || true)"
+  if [ -n "${CURRENT_REMOTE}" ] && [ "${CURRENT_REMOTE}" != "${REPO_URL}" ]; then
+    echo "➡️  Updating git remote to ${REPO_URL}..."
+    git remote set-url origin "${REPO_URL}"
+  fi
   git fetch origin
   git reset --hard origin/main
 fi
