@@ -8,6 +8,7 @@ import { lookupRelease, MBReleaseDetail } from '../services/musicBrainz';
 import { createBounty } from '../services/db';
 import { LikeButton } from '../components/LikeButton';
 import { getSession } from '../services/auth';
+import { CoverImage } from '../components/ui/CoverImage';
 
 interface AlbumPageProps {
   onPlay: (track: Track) => void;
@@ -73,11 +74,12 @@ export const AlbumPage: React.FC<AlbumPageProps> = ({ onPlay, currentTrackId, is
 
              {/* Album Art */}
              <div className="relative z-10 group shrink-0 shadow-2xl rounded-lg overflow-hidden w-60 h-60 md:w-72 md:h-72 bg-gray-800">
-                 <img 
-                    src={album.coverUrl} 
-                    alt={album.title} 
+                 <CoverImage 
+                    mbid={album.id}
+                    fallbackSrc={album.coverUrl}
+                    type="album"
                     className="w-full h-full object-cover" 
-                    onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300/18181b/555?text=NO+COVER'; }}
+                    alt={album.title}
                  />
                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
                      <Play size={48} fill="white" className="text-white drop-shadow-lg cursor-pointer hover:scale-110 transition-transform" />

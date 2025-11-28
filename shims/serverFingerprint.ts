@@ -4,7 +4,6 @@ import { join } from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { resolveFingerprint } from './metadataCache';
-import { handleUpload } from './serverStorage';
 
 const execFileAsync = promisify(execFile);
 
@@ -38,22 +37,14 @@ const parseFpcalcOutput = (stdout: string) => {
  * - No persistent storage: files are only kept for the duration of fingerprinting.
  * - For permanent storage, you would move/copy the file to a dedicated media directory.
  */
-export const identifyUploadedAudio = async (buffer: Buffer, userId: string, originalName: string) => {
-  // 1. Identify fingerprint and metadata
+export const identifyUploadedAudio = async (buffer: Buffer) => {
   const tmpDir = await mkdtemp(join(tmpdir(), 'bitbeats-fp-'));
   const tmpFile = join(tmpDir, 'upload_audio');
   try {
     await writeFile(tmpFile, buffer);
     const { stdout } = await execFileAsync('fpcalc', ['-length', '120', tmpFile]);
     const { fingerprint, duration } = parseFpcalcOutput(stdout);
-
-    // 2. Store and seed file (deduplication, expiry, seeding)
-    const entry = await handleUpload(userId, buffer, originalName);
-
-    // 3. Resolve metadata
-    const metadata = await resolveFingerprint(fingerprint, duration);
-
-    return { ...metadata, magnetURI: entry.magnetURI, hash: entry.hash };
+    return await resolveFingerprint(fingerprint, duration);
   } catch (err: any) {
     if (err.code === 'ENOENT') {
       throw new Error('fpcalc binary not found. Ensure libchromaprint-tools is installed.');

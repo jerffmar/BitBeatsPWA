@@ -88,3 +88,11 @@ MIT
   3. Return the normalized metadata payload used throughout the app.
 
 This removes the need for the browser to ship heavy WASM binaries while keeping fingerprint identification mandatory.
+
+## 🗄 Server-Side Storage & Seeding
+
+- Each user can upload up to **15GB** of audio files.
+- Uploaded files are stored server-side and seeded via WebTorrent using all trackers in `trackers.txt`.
+- Files are deleted after **90 days** unless re-uploaded or renewed by any user.
+- If multiple users upload the same file (by fingerprint/hash), the expiry is renewed and all uploaders are tracked.
+- Deduplication ensures only one copy of each unique file is stored and seeded.

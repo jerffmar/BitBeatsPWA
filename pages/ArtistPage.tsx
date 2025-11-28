@@ -8,6 +8,7 @@ import { Track } from '../types';
 import { lookupArtist, getArtistDiscography, MBArtist, MBRelease } from '../services/musicBrainz';
 import { LikeButton } from '../components/LikeButton';
 import { getSession } from '../services/auth';
+import { CoverImage } from '../components/ui/CoverImage';
 
 interface ArtistPageProps {
   onPlay: (track: Track) => void;
@@ -57,6 +58,8 @@ export const ArtistPage: React.FC<ArtistPageProps> = ({ onPlay, swarmTracks }) =
   if (!artist || !id) return <div className="text-white p-10">Artist not found</div>;
 
   // Background Image fallback using first album cover or generic
+  // Note: For background we still use the URL directly as CSS needs a string, but we can improve logic if needed.
+  // Ideally we would fetch a valid artist image from Fanart.tv but for now we fallback to first album.
   const bgImage = releases[0]?.coverUrl || 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?q=80&w=1600';
 
   return (
@@ -125,11 +128,13 @@ export const ArtistPage: React.FC<ArtistPageProps> = ({ onPlay, swarmTracks }) =
                       {releases.map(album => (
                           <Link to={`/album/${album.id}`} key={album.id} className="group block bg-white/5 p-4 rounded-xl hover:bg-white/10 transition-colors">
                               <div className="aspect-square rounded-lg overflow-hidden mb-4 shadow-lg relative bg-gray-800">
-                                  <img 
-                                    src={album.coverUrl} 
-                                    alt={album.title} 
+                                  <CoverImage 
+                                    mbid={album.id}
+                                    fallbackSrc={album.coverUrl}
+                                    type="album"
+                                    size="small"
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                                    onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300/18181b/555?text=NO+COVER'; }}
+                                    alt={album.title}
                                   />
                               </div>
                               <h3 className="text-white font-bold truncate">{album.title}</h3>

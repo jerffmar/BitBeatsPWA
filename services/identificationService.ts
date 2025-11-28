@@ -337,13 +337,11 @@ export const identifyAudioFile = async (
   let fingerprintReady = false;
 
   try {
-    console.log('[ID] Loading fpcalc-browser module…');
-    // @ts-ignore
-    const fpcalc = await import('fpcalc-browser');
-    console.log('[ID] Module loaded. Generating fingerprint…');
-    const result = await fpcalc.calculate(file);
-    duration = result.duration;
-    fingerprint = result.fingerprint;
+    // Use audioEngine.ts for fingerprint and duration
+    const { analyzeAudio } = await import('../services/audioEngine');
+    const analysis = await analyzeAudio(file);
+    fingerprint = analysis.fingerprint;
+    duration = analysis.duration;
     fingerprintReady = true;
     console.log(`[ID] Fingerprint generated (${duration.toFixed(2)}s). Hash preview: ${fingerprint.slice(0, 24)}…`);
   } catch (err) {
@@ -419,3 +417,6 @@ export const identifyAudioFile = async (
   onStatusUpdate?.('fuzzy_matching');
   return attemptFuzzyMatch(file, duration);
 };
+
+// The fingerprint and duration are now always generated from the actual audio file using audioEngine.ts (analyzeAudio).
+// No mock fingerprint or duration is used.

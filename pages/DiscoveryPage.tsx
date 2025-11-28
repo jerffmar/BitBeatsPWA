@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 import { Play, Heart, Disc, Mic2, Sparkles, User, ArrowRight } from 'lucide-react';
 import { Track, LibraryEntry } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { CoverImage } from '../components/ui/CoverImage';
 
 interface DiscoveryPageProps {
   library: Record<string, LibraryEntry>;
@@ -28,7 +29,7 @@ export const DiscoveryPage: React.FC<DiscoveryPageProps> = ({ library, tracks, o
   // 2. "Your Rotation" - Extract unique artists from recent plays
   const recentArtists = useMemo(() => {
     const unique = new Set<string>();
-    const artists: { name: string; id: string; image?: string }[] = [];
+    const artists: { name: string; id: string; image?: string; mbid?: string }[] = [];
     
     recentTracks.forEach(t => {
       if (!unique.has(t.artist)) {
@@ -38,7 +39,8 @@ export const DiscoveryPage: React.FC<DiscoveryPageProps> = ({ library, tracks, o
         artists.push({ 
             name: t.artist, 
             id: t.artist, // using name as ID for demo
-            image: t.coverUrl 
+            image: t.coverUrl,
+            mbid: t.mbid // Pass through MBID if available to try Cover Art
         });
       }
     });
@@ -125,7 +127,13 @@ export const DiscoveryPage: React.FC<DiscoveryPageProps> = ({ library, tracks, o
                         className="snap-start shrink-0 w-[160px] group cursor-pointer"
                     >
                         <div className="aspect-square rounded-lg bg-gray-800 mb-3 overflow-hidden relative shadow-lg">
-                            <img src={track.coverUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                            <CoverImage 
+                                mbid={track.mbid} 
+                                fallbackSrc={track.coverUrl}
+                                type="track"
+                                size="small"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                            />
                             <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                                 <div className="bg-brand-500 text-black rounded-full p-3 shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all">
                                     <Play size={20} fill="currentColor" />
@@ -154,7 +162,13 @@ export const DiscoveryPage: React.FC<DiscoveryPageProps> = ({ library, tracks, o
                         className="snap-start shrink-0 w-[120px] flex flex-col items-center group cursor-pointer"
                     >
                         <div className="w-[120px] h-[120px] rounded-full bg-gray-800 mb-3 overflow-hidden relative border-2 border-transparent group-hover:border-brand-500 transition-all shadow-xl">
-                            <img src={artist.image} className="w-full h-full object-cover" />
+                            <CoverImage 
+                                mbid={artist.mbid} 
+                                fallbackSrc={artist.image}
+                                type="artist"
+                                size="small"
+                                className="w-full h-full object-cover" 
+                            />
                         </div>
                         <h3 className="font-bold text-white text-center text-sm truncate w-full">{artist.name}</h3>
                     </div>
@@ -186,7 +200,12 @@ export const DiscoveryPage: React.FC<DiscoveryPageProps> = ({ library, tracks, o
                         className="snap-start shrink-0 w-[280px] group cursor-pointer bg-white/5 border border-white/5 rounded-xl p-3 hover:bg-white/10 transition-colors"
                      >
                          <div className="aspect-video rounded-lg bg-gray-800 mb-3 overflow-hidden relative">
-                             <img src={track.coverUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                             <CoverImage 
+                                mbid={track.mbid} 
+                                fallbackSrc={track.coverUrl}
+                                type="track"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                             />
                              <div className="absolute top-2 left-2 flex gap-1">
                                  {track.tags.slice(0, 2).map(tag => (
                                      <span key={tag} className="px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-[10px] text-white font-bold uppercase tracking-wider">

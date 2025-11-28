@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { 
   HardDrive, Mic2, Disc, Music, List, Upload, CheckCircle, 
   AlertCircle, Loader, FileAudio, Database, Server, Layers,
-  ChevronRight, Folder, FolderOpen
+  ChevronRight
 } from 'lucide-react';
 import { Track, LibraryEntry, LikedItem } from '../types';
 import { useTrackIdentifier } from '../hooks/useTrackIdentifier';
 import type { DetailedMetadata } from '../services/musicBrainz';
 import { likeService } from '../services/likeService';
+import { CoverImage } from '../components/ui/CoverImage';
 
 interface LibraryDashboardProps {
   library: Record<string, LibraryEntry>;
@@ -31,60 +32,6 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
   const [likedArtists, setLikedArtists] = useState<{total: number, preview: LikedItem[]}>({total: 0, preview: []});
   const [likedAlbums, setLikedAlbums] = useState<{total: number, preview: LikedItem[]}>({total: 0, preview: []});
   const [likedTracks, setLikedTracks] = useState<{total: number, preview: LikedItem[]}>({total: 0, preview: []});
-
-  // --- Local Storage Explorer State ---
-  const PROTECTED_KEYS = [
-    'bitbeats_user_pair',                  // SEA keypair
-    'gun/',                                // Any namespaced gun localStorage (precaution)
-    'vite:',                               // Vite HMR caches
-    'persist:',                            // Common prefixes
-    'bitbeats_settings',                   // hypothetical app settings
-  ];
-  const [lsItems, setLsItems] = useState<{ key: string; size: number; protected: boolean }[]>([]);
-
-  const computeSize = (val: string | null) => (val ? new Blob([val]).size : 0);
-
-  const refreshLocalStorage = useCallback(() => {
-    const items: { key: string; size: number; protected: boolean }[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i) || '';
-      const v = localStorage.getItem(k);
-      const isProtected =
-        PROTECTED_KEYS.some(p => k === p || k.startsWith(p));
-      items.push({ key: k, size: computeSize(v), protected: isProtected });
-    }
-    // Sort protected first for clarity
-    items.sort((a, b) => Number(b.protected) - Number(a.protected) || b.size - a.size);
-    setLsItems(items);
-  }, []);
-
-  useEffect(() => {
-    refreshLocalStorage();
-  }, [refreshLocalStorage]);
-
-  const deleteLocalStorageKey = (key: string) => {
-    const isProtected =
-      PROTECTED_KEYS.some(p => key === p || key.startsWith(p));
-    if (isProtected) {
-      alert('This item is protected and cannot be deleted.');
-      return;
-    }
-    localStorage.removeItem(key);
-    refreshLocalStorage();
-  };
-
-  const clearNonCriticalLocalStorage = () => {
-    const toRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i) || '';
-      const isProtected =
-        PROTECTED_KEYS.some(p => k === p || k.startsWith(p));
-      if (!isProtected) toRemove.push(k);
-    }
-    toRemove.forEach(k => localStorage.removeItem(k));
-    refreshLocalStorage();
-    alert(`Cleared ${toRemove.length} non-critical items from Local Storage.`);
-  };
 
   // --- Fetch Likes ---
   useEffect(() => {
@@ -180,9 +127,9 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
    * Acts as a big button to navigate to the specific library page.
    */
   const LibraryWidget = ({ 
-      title, icon: Icon, total, items, path
+      title, icon: Icon, total, items, path, type
   }: { 
-      title: string, icon: any, total: number, items: LikedItem[], path: string
+      title: string, icon: any, total: number, items: LikedItem[], path: string, type: 'artist' | 'album' | 'track'
   }) => {
       
       const gridItems = [...items];
@@ -214,9 +161,16 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
                   {displayItems.map((item, i) => (
                       <div key={i} className="bg-white/5 w-full h-full overflow-hidden relative first:rounded-tl-lg second:rounded-tr-lg third:rounded-bl-lg fourth:rounded-br-lg">
                           {item ? (
-                              <img src={item.coverUrl} className="w-full h-full object-cover" alt="" />
+                              <CoverImage 
+                                mbid={item.entityId} 
+                                fallbackSrc={item.coverUrl}
+                                type={type}
+                                size="small"
+                                className="w-full h-full object-cover" 
+                                alt={item.title} 
+                              />
                           ) : (
-                              <div className="w-full h-full flex items-center justify-center opacity-10">
+                              <div className="w-full h-full flex items-center justify-center opacity-10 text-gray-400">
                                   <Icon size={24} />
                               </div>
                           )}
@@ -234,6 +188,14 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
       );
   };
 
+  // --- Seeding Status Dashboard ---
+  const seedingEntries = Object.values(library)
+    .map(entry => {
+      const track = tracks.find(t => t.id === entry.trackId);
+      return track ? { ...entry, track } : null;
+    })
+    .filter(Boolean);
+
   return (
     <div className="flex flex-col h-full bg-neutral-900 overflow-y-auto pb-32">
         {/* Header */}
@@ -250,7 +212,15 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
         </div>
 
         <div className="p-8 max-w-7xl mx-auto w-full space-y-8">
-            
+            {/* Add Seeding Info Button */}
+            <div className="mb-4">
+                <button
+                  onClick={() => navigate('/seeding-info')}
+                  className="bg-brand-500 text-black px-4 py-2 rounded-full font-bold shadow hover:bg-brand-400 transition"
+                >
+                  View Seeding Info
+                </button>
+            </div>
             {/* Library Widgets Grid (Likes) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <LibraryWidget 
@@ -259,6 +229,7 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
                     total={likedArtists.total} 
                     items={likedArtists.preview} 
                     path="/library/artists"
+                    type="artist"
                 />
                 <LibraryWidget 
                     title="Albums" 
@@ -266,6 +237,7 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
                     total={likedAlbums.total} 
                     items={likedAlbums.preview} 
                     path="/library/albums"
+                    type="album"
                 />
                 <LibraryWidget 
                     title="Songs" 
@@ -273,6 +245,7 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
                     total={likedTracks.total} 
                     items={likedTracks.preview} 
                     path="/library/tracks"
+                    type="track"
                 />
                 {/* Placeholder Playlist Widget */}
                  <div className="group bg-white/5 border border-white/10 border-dashed rounded-2xl p-5 cursor-not-allowed opacity-60 flex flex-col justify-center items-center text-center h-[340px] md:h-auto">
@@ -419,7 +392,14 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
                                  return (
                                      <div key={idx} className="flex items-center gap-3 group cursor-pointer hover:bg-white/5 p-2 -mx-2 rounded-lg transition-colors">
                                          <div className="w-8 h-8 rounded bg-gray-800 overflow-hidden">
-                                             <img src={track.coverUrl} className="w-full h-full object-cover" alt={track.title} />
+                                             <CoverImage 
+                                                mbid={track.mbid} 
+                                                fallbackSrc={track.coverUrl}
+                                                type="track"
+                                                size="small"
+                                                className="w-full h-full object-cover" 
+                                                alt={track.title} 
+                                             />
                                          </div>
                                          <div className="min-w-0 flex-1">
                                              <div className="text-sm text-white truncate font-medium">{track.title}</div>
@@ -433,57 +413,87 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
                              )}
                         </div>
                     </div>
-
-                    {/* Local Storage Explorer (New) */}
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="font-bold text-white text-sm uppercase tracking-wider">Local Storage</h3>
-                          <button
-                            onClick={clearNonCriticalLocalStorage}
-                            className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1 rounded border border-red-500/20"
-                            title="Clear non-critical localStorage keys"
-                          >
-                            Clean Non-Critical
-                          </button>
-                        </div>
-                        {lsItems.length === 0 ? (
-                          <p className="text-gray-500 text-sm">Local Storage is empty.</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {lsItems.map(item => (
-                              <div
-                                key={item.key}
-                                className="flex items-center justify-between px-3 py-2 bg-black/20 rounded-lg border border-white/10"
-                              >
-                                <div className="min-w-0">
-                                  <div className="text-white text-sm truncate">{item.key}</div>
-                                  <div className="text-xs text-gray-500">
-                                    {(item.size / 1024).toFixed(2)} KB {item.protected && '• Protected'}
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={() => deleteLocalStorageKey(item.key)}
-                                  disabled={item.protected}
-                                  className={`text-xs px-2 py-1 rounded border ${
-                                    item.protected
-                                      ? 'opacity-40 cursor-not-allowed border-white/10 text-gray-500'
-                                      : 'border-red-500/20 text-red-400 hover:bg-red-500/10'
-                                  }`}
-                                  title={item.protected ? 'Protected item' : 'Delete from Local Storage'}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <div className="mt-4 text-[10px] text-gray-500 uppercase tracking-wider font-bold">
-                          Critical keys are protected automatically.
-                        </div>
-                    </div>
                 </div>
 
             </div>
+
+            {/* --- Seeding Status Dashboard --- */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <Server size={20} className="text-brand-500" />
+                Seeding Status Dashboard
+              </h2>
+              {seedingEntries.length === 0 ? (
+                <p className="text-gray-500 text-sm italic">No tracks in your library yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-gray-400 border-b border-white/10">
+                        <th className="py-2 px-2 text-left">Cover</th>
+                        <th className="py-2 px-2 text-left">Title</th>
+                        <th className="py-2 px-2 text-left">Artist</th>
+                        <th className="py-2 px-2 text-left">Status</th>
+                        <th className="py-2 px-2 text-left">Progress</th>
+                        <th className="py-2 px-2 text-left">Last Played</th>
+                        <th className="py-2 px-2 text-left">Added</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {seedingEntries.map((entry: any, idx) => (
+                        <tr key={entry.trackId} className="border-b border-white/10 hover:bg-white/10 transition-colors">
+                          <td className="py-2 px-2">
+                            <CoverImage
+                              mbid={entry.track.mbid}
+                              fallbackSrc={entry.track.coverUrl}
+                              type="track"
+                              size="small"
+                              className="w-10 h-10 object-cover rounded"
+                              alt={entry.track.title}
+                            />
+                          </td>
+                          <td className="py-2 px-2 text-white font-medium">{entry.track.title}</td>
+                          <td className="py-2 px-2 text-gray-400">{entry.track.artist}</td>
+                          <td className="py-2 px-2">
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                              entry.status === 'SEEDING'
+                                ? 'bg-emerald-500/20 text-emerald-400'
+                                : entry.status === 'DOWNLOADING'
+                                ? 'bg-yellow-500/20 text-yellow-400'
+                                : 'bg-gray-700 text-gray-400'
+                            }`}>
+                              {entry.status}
+                            </span>
+                          </td>
+                          <td className="py-2 px-2">
+                            <div className="w-24 bg-black/30 rounded-full h-2 relative">
+                              <div
+                                className={`h-2 rounded-full ${
+                                  entry.status === 'SEEDING'
+                                    ? 'bg-emerald-500'
+                                    : entry.status === 'DOWNLOADING'
+                                    ? 'bg-yellow-500'
+                                    : 'bg-gray-500'
+                                }`}
+                                style={{ width: `${Math.round((entry.progress ?? 0) * 100)}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-xs text-gray-400 ml-2">{Math.round((entry.progress ?? 0) * 100)}%</span>
+                          </td>
+                          <td className="py-2 px-2 text-gray-400">
+                            {entry.lastPlayed ? new Date(entry.lastPlayed).toLocaleString() : '-'}
+                          </td>
+                          <td className="py-2 px-2 text-gray-400">
+                            {entry.addedAt ? new Date(entry.addedAt).toLocaleString() : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
         </div>
     </div>
   );

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { 
@@ -30,6 +29,7 @@ import { LikeButton } from './components/LikeButton';
 import { LibraryArtists } from './pages/LibraryArtists';
 import { LibraryAlbums } from './pages/LibraryAlbums';
 import { LibraryTracks } from './pages/LibraryTracks';
+import { SeedingInfo } from './pages/SeedingInfo';
 
 // --- Components ---
 
@@ -659,6 +659,8 @@ function App() {
              
              <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-6 mb-3 px-4">My Collection</div>
              <NavItem path="/library" icon={HardDrive} label="My Library" />
+             {/* Sharing button below My Library */}
+             <NavItem path="/seeding-info" icon={Share2} label="Sharing" />
            </nav>
            
            <div className="mt-auto pt-6 border-t border-white/10">
@@ -944,6 +946,13 @@ function App() {
                         tracks={tracks} 
                         onImport={handleLocalImport} 
                         user={user}
+                     />
+                } />
+                {/* --- SEEDING INFO PAGE --- */}
+                <Route path="/seeding-info" element={
+                     <SeedingInfo 
+                        library={library}
+                        tracks={tracks}
                      />
                 } />
 

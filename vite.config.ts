@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { resolve } from 'path';
 import react from '@vitejs/plugin-react';
 
 // https://vitejs.dev/config/
@@ -14,7 +15,7 @@ export default defineConfig(async () => {
     console.warn('vite-plugin-static-copy not found. Skipping WASM copy. Ensure fpcalc.wasm is served manually in production.');
   }
 
-  const fpcalcShim = new URL('./shims/fpcalc-browser.ts', import.meta.url).pathname;
+  const fpcalcShim = resolve(__dirname, 'shims/fpcalc-browser.ts');
 
   return {
     plugins: [
@@ -25,7 +26,7 @@ export default defineConfig(async () => {
     base: '/',
     resolve: {
       alias: {
-        'fpcalc-browser': fpcalcShim
+        'fpcalc-browser': fpcalcShim // Ensure Vite resolves this import
       }
     },
     build: {

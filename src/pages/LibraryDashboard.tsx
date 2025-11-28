@@ -71,12 +71,21 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
       if (file.type.startsWith('audio/')) {
         setDroppedFile(file);
-        identify(file);
+        // Use audioEngine.ts to get real fingerprint and duration
+        (async () => {
+          const { analyzeAudio } = await import('../services/audioEngine');
+          const analysis = await analyzeAudio(file);
+          // analysis.fingerprint and analysis.duration should be real values
+          identify({
+            fingerprint: analysis.fingerprint,
+            duration: analysis.duration
+          });
+        })();
       }
     }
   }, [identify]);
@@ -212,7 +221,15 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
         </div>
 
         <div className="p-8 max-w-7xl mx-auto w-full space-y-8">
-            
+            {/* Add Seeding Info Button */}
+            <div className="mb-4">
+                <button
+                  onClick={() => navigate('/seeding-info')}
+                  className="bg-brand-500 text-black px-4 py-2 rounded-full font-bold shadow hover:bg-brand-400 transition"
+                >
+                  View Seeding Info
+                </button>
+            </div>
             {/* Library Widgets Grid (Likes) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <LibraryWidget 
