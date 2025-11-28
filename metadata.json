@@ -1,7 +1,0 @@
-{
-  "name": "BitBeats",
-  "description": "Decentralized, duty-free audio streaming platform. Offline-first PWA powered by simulated WebTorrent and OPFS.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
-}
