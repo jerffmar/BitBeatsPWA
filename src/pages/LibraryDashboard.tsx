@@ -188,6 +188,14 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
       );
   };
 
+  // --- Seeding Status Dashboard ---
+  const seedingEntries = Object.values(library)
+    .map(entry => {
+      const track = tracks.find(t => t.id === entry.trackId);
+      return track ? { ...entry, track } : null;
+    })
+    .filter(Boolean);
+
   return (
     <div className="flex flex-col h-full bg-neutral-900 overflow-y-auto pb-32">
         {/* Header */}
@@ -400,6 +408,84 @@ export const LibraryDashboard: React.FC<LibraryDashboardProps> = ({ library, tra
                 </div>
 
             </div>
+
+            {/* --- Seeding Status Dashboard --- */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <Server size={20} className="text-brand-500" />
+                Seeding Status Dashboard
+              </h2>
+              {seedingEntries.length === 0 ? (
+                <p className="text-gray-500 text-sm italic">No tracks in your library yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-gray-400 border-b border-white/10">
+                        <th className="py-2 px-2 text-left">Cover</th>
+                        <th className="py-2 px-2 text-left">Title</th>
+                        <th className="py-2 px-2 text-left">Artist</th>
+                        <th className="py-2 px-2 text-left">Status</th>
+                        <th className="py-2 px-2 text-left">Progress</th>
+                        <th className="py-2 px-2 text-left">Last Played</th>
+                        <th className="py-2 px-2 text-left">Added</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {seedingEntries.map((entry: any, idx) => (
+                        <tr key={entry.trackId} className="border-b border-white/10 hover:bg-white/10 transition-colors">
+                          <td className="py-2 px-2">
+                            <CoverImage
+                              mbid={entry.track.mbid}
+                              fallbackSrc={entry.track.coverUrl}
+                              type="track"
+                              size="small"
+                              className="w-10 h-10 object-cover rounded"
+                              alt={entry.track.title}
+                            />
+                          </td>
+                          <td className="py-2 px-2 text-white font-medium">{entry.track.title}</td>
+                          <td className="py-2 px-2 text-gray-400">{entry.track.artist}</td>
+                          <td className="py-2 px-2">
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                              entry.status === 'SEEDING'
+                                ? 'bg-emerald-500/20 text-emerald-400'
+                                : entry.status === 'DOWNLOADING'
+                                ? 'bg-yellow-500/20 text-yellow-400'
+                                : 'bg-gray-700 text-gray-400'
+                            }`}>
+                              {entry.status}
+                            </span>
+                          </td>
+                          <td className="py-2 px-2">
+                            <div className="w-24 bg-black/30 rounded-full h-2 relative">
+                              <div
+                                className={`h-2 rounded-full ${
+                                  entry.status === 'SEEDING'
+                                    ? 'bg-emerald-500'
+                                    : entry.status === 'DOWNLOADING'
+                                    ? 'bg-yellow-500'
+                                    : 'bg-gray-500'
+                                }`}
+                                style={{ width: `${Math.round((entry.progress ?? 0) * 100)}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-xs text-gray-400 ml-2">{Math.round((entry.progress ?? 0) * 100)}%</span>
+                          </td>
+                          <td className="py-2 px-2 text-gray-400">
+                            {entry.lastPlayed ? new Date(entry.lastPlayed).toLocaleString() : '-'}
+                          </td>
+                          <td className="py-2 px-2 text-gray-400">
+                            {entry.addedAt ? new Date(entry.addedAt).toLocaleString() : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
         </div>
     </div>
   );

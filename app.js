@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { resolveFingerprint } from '../services/metadataCache';
 import multer from 'multer';
+import express from 'express';
+import { identifyUploadRoute } from './controllers/identifyController';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -75,3 +77,8 @@ export const identifyUploadRoute = [
   audioIdentifyUpload,
   identifyUploadHandler
 ];
+
+const app = express();
+app.post('/api/identify/upload', ...identifyUploadRoute);
+
+export default app;

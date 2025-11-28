@@ -1,106 +1,101 @@
 import type { User } from '../types.ts';
-import { getGun } from './db.ts';
 
-const STORAGE_KEY_PAIR = 'bitbeats_user_pair';
+const USERS_KEY = 'bitbeats_users';
+const SESSION_KEY = 'bitbeats_session';
 
-// We persist the SEA KeyPair in localStorage manually 
-// because we have disabled Gun's automatic localStorage sync 
-// to prevent the entire graph from filling up the browser quota.
+interface StoredUser {
+  id: string;
+  username: string;
+  passwordHash: string;
+  salt: string;
+  createdAt: number;
+}
 
-export const getKeyPair = (): any => {
-    const pairStr = localStorage.getItem(STORAGE_KEY_PAIR);
-    if (!pairStr) return null;
-    try {
-        return JSON.parse(pairStr);
-    } catch {
-        return null;
-    }
+const loadUsers = (): Record<string, StoredUser> => {
+  try {
+    const raw = localStorage.getItem(USERS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
 };
 
+const saveUsers = (users: Record<string, StoredUser>) => {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+};
+
+const hashPassword = async (salt: string, password: string) => {
+  const data = new TextEncoder().encode(`${salt}:${password}`);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+const mapStoredUser = (stored: StoredUser): User => ({
+  id: stored.id,
+  username: stored.username,
+  handle: `@${stored.username}`,
+  joinedAt: stored.createdAt
+});
+
 export const getSession = async (): Promise<User | null> => {
-  const pairStr = localStorage.getItem(STORAGE_KEY_PAIR);
-  if (!pairStr) return null;
-
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (!raw) return null;
   try {
-    const pair = JSON.parse(pairStr);
-    const gun = getGun();
-    const user = gun.user();
-    
-    if (user.is) {
-      // Already authenticated in memory
-      return {
-        id: user.is.pub,
-        username: user.is.alias,
-        handle: '@' + user.is.alias,
-        joinedAt: Date.now() // Gun doesn't store this by default on root, simplified
-      };
-    }
-
-    // Re-authenticate with stored keys
-    return new Promise((resolve) => {
-      user.auth(pair, (ack: any) => {
-        if (ack.err) {
-          resolve(null);
-        } else {
-          resolve({
-            id: ack.sea.pub,
-            username: ack.sea.alias || 'Anon',
-            handle: '@' + (ack.sea.alias || 'Anon'),
-            joinedAt: Date.now()
-          });
-        }
-      });
-    });
-
-  } catch (e) {
+    const stored = JSON.parse(raw) as StoredUser;
+    return mapStoredUser(stored);
+  } catch {
     return null;
   }
 };
 
-export const logout = () => {
-  const gun = getGun();
-  gun.user().leave();
-  localStorage.removeItem(STORAGE_KEY_PAIR);
+export const login = async (
+  username: string,
+  password: string
+): Promise<{ success: boolean; user?: User; error?: string }> => {
+  const users = loadUsers();
+  const record = users[username.toLowerCase()];
+  if (!record) return { success: false, error: 'User not found' };
+  const hash = await hashPassword(record.salt, password);
+  if (hash !== record.passwordHash) {
+    return { success: false, error: 'Invalid credentials' };
+  }
+  localStorage.setItem(SESSION_KEY, JSON.stringify(record));
+  return { success: true, user: mapStoredUser(record) };
 };
 
-export const login = async (username: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> => {
-  const gun = getGun();
-  
-  return new Promise((resolve) => {
-    gun.user().auth(username, password, (ack: any) => {
-      if (ack.err) {
-        resolve({ success: false, error: ack.err });
-      } else {
-        // Save keypair for persistence
-        localStorage.setItem(STORAGE_KEY_PAIR, JSON.stringify(ack.sea));
-        
-        resolve({ 
-          success: true, 
-          user: {
-            id: ack.sea.pub,
-            username: ack.alias,
-            handle: '@' + ack.alias,
-            joinedAt: Date.now()
-          } 
-        });
-      }
-    });
-  });
-};
-
-export const register = async (username: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> => {
-  const gun = getGun();
-
+export const register = async (
+  username: string,
+  password: string
+): Promise<{ success: boolean; user?: User; error?: string }> => {
   if (username.length < 3) return { success: false, error: 'Username too short' };
-  
-  return new Promise((resolve) => {
-    gun.user().create(username, password, (ack: any) => {
-      if (ack.err) {
-         resolve({ success: false, error: ack.err });
-      } else {
-         // Auto login after create
-         login(username, password).then(resolve);
-      }
-    });
-  });
+  if (password.length < 6) return { success: false, error: 'Password must be at least 6 characters' };
+
+  const users = loadUsers();
+  const key = username.toLowerCase();
+  if (users[key]) return { success: false, error: 'Username already exists' };
+
+  const saltBytes = new Uint8Array(16);
+  crypto.getRandomValues(saltBytes);
+  const salt = Array.from(saltBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  const passwordHash = await hashPassword(salt, password);
+
+  const stored: StoredUser = {
+    id: `user_${crypto.randomUUID()}`,
+    username,
+    salt,
+    passwordHash,
+    createdAt: Date.now()
+  };
+
+  users[key] = stored;
+  saveUsers(users);
+  localStorage.setItem(SESSION_KEY, JSON.stringify(stored));
+
+  return { success: true, user: mapStoredUser(stored) };
+};
+
+export const logout = () => {
+  localStorage.removeItem(SESSION_KEY);
 };

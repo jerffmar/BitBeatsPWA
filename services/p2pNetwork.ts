@@ -1,73 +1,68 @@
 import type { UserStats } from '../types.ts';
-import { getGun } from './db.ts';
-import { getKeyPair } from './auth.ts';
 
-/**
- * P2P NETWORK SERVICE
- * Simulates the complex interactions of WebTorrent and Gun.js
- */
+const SIGNING_SECRET_KEY = 'bitbeats_signing_secret';
+const PEER_PREFIX = 'bitbeats_peer_';
+const HEARTBEAT_INTERVAL = 5000;
+const PEER_TTL = 8000;
 
-// --- Ratio Economics ---
+const peerId = `${PEER_PREFIX}${crypto.randomUUID()}`;
+
+const heartbeat = () => {
+  localStorage.setItem(peerId, Date.now().toString());
+};
+
+setInterval(heartbeat, HEARTBEAT_INTERVAL);
+heartbeat();
 
 export const getReputation = (ratio: number, uploads: number): UserStats['reputation'] => {
-    if (ratio < 0.5) return 'Leecher';
-    if (ratio < 1.0) return 'Member';
-    if (ratio >= 1.0 && uploads > 1024 * 1024 * 1024) return 'Archivist'; // >1GB
-    if (ratio >= 2.0) return 'Gold Seeder';
-    return 'Seeder';
+  if (ratio < 0.5) return 'Leecher';
+  if (ratio < 1.0) return 'Member';
+  if (ratio >= 1.0 && uploads > 1024 * 1024 * 1024) return 'Archivist';
+  if (ratio >= 2.0) return 'Gold Seeder';
+  return 'Seeder';
 };
-
-// --- LAN/Mesh Peer Discovery ---
 
 export const discoverLocalPeers = async (): Promise<number> => {
-    const gun = getGun();
-    if (!gun) return 0;
-
-    // Access internal Gun mesh state (opt.peers)
-    // This isn't strictly "LAN" only, but shows active mesh connections
-    // @ts-ignore
-    const peers = gun._.opt.peers;
-    if (!peers) return 0;
-    
-    return Object.keys(peers).length;
-};
-
-// --- Crypto Signing (Real SEA) ---
-
-export const signUpload = async (fileBlob: Blob, dataToSign: string): Promise<string> => {
-    const pair = getKeyPair();
-    if (!pair) throw new Error("User keypair not found. Cannot sign.");
-
-    if (!window.SEA) throw new Error("SEA not loaded");
-
-    console.log("🔐 Signing content with Ed25519...");
-    
-    // We sign the hash/metadata of the upload
-    const signature = await window.SEA.sign(dataToSign, pair);
-    return signature;
-};
-
-// --- Ghost Seeding ---
-
-let ghostAudio: HTMLAudioElement | null = null;
-
-export const toggleGhostSeeding = (enable: boolean) => {
-    if (enable) {
-        if (!ghostAudio) {
-            // Create silent loop
-            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const oscillator = ctx.createOscillator();
-            const gain = ctx.createGain();
-            gain.gain.value = 0.0001; // Not zero, but inaudible to prevent OS sleeping
-            oscillator.connect(gain);
-            gain.connect(ctx.destination);
-            // This is a hacky visualization of what the service worker would do
-            console.log("👻 Ghost Seeder Active: Keeping WebRTC connection alive.");
-        }
+  const now = Date.now();
+  const keys = Object.keys(localStorage).filter(key => key.startsWith(PEER_PREFIX));
+  let active = 0;
+  keys.forEach(key => {
+    const ts = Number(localStorage.getItem(key));
+    if (!ts || now - ts > PEER_TTL) {
+      localStorage.removeItem(key);
     } else {
-        if (ghostAudio) {
-            // ghostAudio.pause(); 
-            // Cleanup
-        }
+      active += 1;
     }
+  });
+  return active;
+};
+
+export const signUpload = async (_fileBlob: Blob, dataToSign: string): Promise<string> => {
+  let secret = localStorage.getItem(SIGNING_SECRET_KEY);
+  if (!secret) {
+    secret = crypto.randomUUID();
+    localStorage.setItem(SIGNING_SECRET_KEY, secret);
+  }
+  const payload = new TextEncoder().encode(`${secret}:${dataToSign}`);
+  const hash = await crypto.subtle.digest('SHA-256', payload);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+let ghostAudio: AudioContext | null = null;
+export const toggleGhostSeeding = (enable: boolean) => {
+  if (enable && !ghostAudio) {
+    ghostAudio = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ghostAudio.createOscillator();
+    const gain = ghostAudio.createGain();
+    gain.gain.value = 0.0001;
+    osc.connect(gain);
+    gain.connect(ghostAudio.destination);
+    osc.start();
+  }
+  if (!enable && ghostAudio) {
+    ghostAudio.close();
+    ghostAudio = null;
+  }
 };

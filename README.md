@@ -1,4 +1,3 @@
-
 # BitBeats
 
 **Decentralized, Duty-Free Audio Streaming**
@@ -24,10 +23,9 @@ BitBeats is a Proof-of-Concept (PoC) Progressive Web App (PWA) demonstrating a d
 - **Weighted Scoring:** Calculates confidence scores based on Title (40%), Artist (30%), and Duration (30%) similarity.
 - **Real-time Lookup:** Fetches metadata directly from MusicBrainz API (Lucene) and AcoustID without relying on static mocks.
 
-### 4. Social Swarm (Powered by Gun.js)
-- **Decentralized Chat:** Swarm Chatter is now powered by **Gun.js**, a distributed graph database. Messages are propagated peer-to-peer without a central API server.
-- **Listen Parties:** Synchronized playback rooms powered by real-time graph updates.
-- **LAN Sync:** Discovery of peers on the local network mesh to save internet bandwidth.
+### 4. Social Swarm (Self-Hosted Mesh)
+- **Local Mesh Bus:** Chats, bounties, parties, and metadata replicate via an in-browser mesh built on `BroadcastChannel` + durable storage, so no third-party relays are required.
+- **Offline-Ready Auth:** Credentials are salted/hashed locally with Web Crypto and never leave the device, enabling air-gapped demos.
 
 ### 5. Creator Studio
 - **Audio Processing Engine:** Client-side analysis and normalization.
@@ -38,7 +36,7 @@ BitBeats is a Proof-of-Concept (PoC) Progressive Web App (PWA) demonstrating a d
 - **Frontend:** React 18+, Vite, TypeScript
 - **Styling:** Tailwind CSS (Dark Mode optimized)
 - **Storage:** Native File System Access API (OPFS)
-- **Networking:** Gun.js (Decentralized DB), WebTorrent (WebRTC P2P)
+- **Networking:** Local Mesh Bus (BroadcastChannel + persistent storage), WebTorrent (WebRTC P2P)
 - **Metadata:** MusicBrainz API, Levenshtein Algorithm
 
 ## 🚀 Roadmap & To-Do Goals
@@ -80,3 +78,13 @@ npm run dev
 
 ## 📄 License
 MIT
+
+### Server-Side Fingerprinting
+
+- Install `libchromaprint-tools` (already baked into `setup.sh`) so the backend can invoke `fpcalc`.
+- POST raw audio via `multipart/form-data` to `/api/identify/upload` (field name `file`) and the server will:
+  1. Run `fpcalc` to extract the Chromaprint fingerprint.
+  2. Resolve metadata via AcoustID/MusicBrainz using the shared cache.
+  3. Return the normalized metadata payload used throughout the app.
+
+This removes the need for the browser to ship heavy WASM binaries while keeping fingerprint identification mandatory.

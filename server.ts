@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import express from 'express';
+import { audioIdentifyUpload, identifyUploadHandler } from './controllers/identifyController';
 
 // https://vitejs.dev/config/
 export default defineConfig(async () => {
@@ -15,6 +17,8 @@ export default defineConfig(async () => {
   }
 
   const fpcalcShim = new URL('./shims/fpcalc-browser.ts', import.meta.url).pathname;
+
+  const app = express();
 
   return {
     plugins: [
@@ -50,3 +54,6 @@ export default defineConfig(async () => {
     }
   };
 });
+
+// Add this route for server-side fingerprint upload
+app.post('/api/identify/upload', audioIdentifyUpload, identifyUploadHandler);

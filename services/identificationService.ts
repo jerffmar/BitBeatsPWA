@@ -1,5 +1,4 @@
 import { calculateSimilarity } from '../utils/stringDistance.ts';
-import { loadMusicMetadata } from "./musicMetadataLoader";
 
 const ACOUSTID_API_KEY = '8XaBELgH'; // Public demo key
 const MB_API_BASE = 'https://musicbrainz.org/ws/2';
@@ -198,118 +197,11 @@ const fuzzySearchStrategy = async (title: string, artist?: string, fileDuration?
 };
 
 /**
- * Main Orchestrator
- */
-export const identifyAudioFile = async (
-  file: File, 
-  onStatusUpdate?: (status: string) => void
-): Promise<IdentificationResult> => {
-  
-  console.log(`🕵️ Starting Hybrid Identification for: ${file.name}`);
-
-  // --- STEP 1: GENERATE FINGERPRINT ---
-  if (onStatusUpdate) onStatusUpdate('fingerprinting');
-  
-  let fingerprint = '';
-  let duration = 0;
-
-  try {
-    // Dynamic import to support optional installation of the heavy WASM library
-    // @ts-ignore
-    const fpcalc = await import('fpcalc-browser');
-    const result = await fpcalc.calculate(file);
-    duration = result.duration;
-    fingerprint = result.fingerprint;
-  } catch (err) {
-    console.warn("Fingerprinting skipped (fpcalc-browser missing or error). Falling back to Fuzzy Match.");
-    // If fingerprinting fails entirely (e.g. library missing), skip to Fuzzy
-    return attemptFuzzyMatch(file, 0); 
-  }
-
-  // --- STEP 2: INTERNAL CACHE CHECK ---
-  if (onStatusUpdate) onStatusUpdate('checking_db');
-
-  try {
-    let internalResult = null;
-    
-    // Real Backend Call
-    const res = await fetch('/api/identify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fingerprint, duration })
-    });
-    if (res.ok) {
-        const json = await res.json();
-        if (json.success) internalResult = json.data;
-    }
-
-    if (internalResult) {
-        console.log("✅ Internal Cache Hit!");
-        return {
-            ...internalResult,
-            score: 1.0,
-            methodUsed: 'cache',
-            duration
-        };
-    }
-
-  } catch (e) {
-      console.warn("Internal DB check failed, proceeding to external.");
-  }
-
-  // --- STEP 3: EXTERNAL ACOUSTID LOOKUP ---
-  if (onStatusUpdate) onStatusUpdate('checking_external');
-
-  try {
-     let acoustIdResult = null;
-
-    const url = `https://api.acoustid.org/v2/lookup?client=${ACOUSTID_API_KEY}&meta=recordings+releases&duration=${Math.floor(duration)}&fingerprint=${fingerprint}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    
-    if (data.results && data.results.length > 0) {
-        const best = data.results.sort((a: any, b: any) => b.score - a.score)[0];
-        if (best.score > 0.8 && best.recordings?.[0]) {
-            const rec = best.recordings[0];
-            const bestRelease = getBestReleaseInfo(rec.releases);
-            
-            acoustIdResult = {
-                title: rec.title,
-                artist: rec.artists?.[0]?.name || 'Unknown',
-                album: bestRelease.title,
-                mbid: rec.id,
-                year: bestRelease.year,
-                score: best.score
-            };
-        }
-    }
-
-     if (acoustIdResult) {
-         console.log("✅ AcoustID Hit!");
-         return {
-             ...acoustIdResult,
-             methodUsed: 'fingerprint',
-             duration,
-             // Add a generic cover if missing (AcoustID doesn't provide art usually)
-             coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300'
-         };
-     }
-
-  } catch (e) {
-      console.warn("AcoustID check failed, proceeding to fuzzy.");
-  }
-
-  // --- STEP 4: FUZZY FALLBACK ---
-  if (onStatusUpdate) onStatusUpdate('fuzzy_matching');
-  return attemptFuzzyMatch(file, duration);
-};
-
-/**
  * Helper: Fuzzy Match Strategy using multiple query orders and relaxed tolerance
  */
 const attemptFuzzyMatch = async (file: File, fileDuration: number): Promise<IdentificationResult> => {
   const { a, t, hasArtist } = parseFilenameSmart(file.name);
-  console.log("⚠️ Falling back to Fuzzy Metadata Matching...");
+  console.log('⚠️ Falling back to Fuzzy Metadata Matching...');
 
   // Try Artist+Title first
   let candidate = await fuzzySearchStrategy(t, hasArtist ? a : undefined, fileDuration);
@@ -339,7 +231,20 @@ const attemptFuzzyMatch = async (file: File, fileDuration: number): Promise<Iden
     return tagResult;
   }
 
-  throw new IdentificationError("No matches found using any identification method.");
+  // --- NEW: Minimal fallback if all else fails ---
+  const cleanedTitle = cleanFilename(file.name);
+  console.warn('⚠️ No fuzzy match found. Returning minimal fallback metadata.');
+  return {
+    mbid: '',
+    title: cleanedTitle,
+    artist: 'Unknown Artist',
+    album: 'Unknown Album',
+    year: '',
+    coverUrl: undefined,
+    score: 0.2,
+    methodUsed: 'fuzzy',
+    duration: fileDuration
+  };
 };
 
 // --- Last-Resort: Read embedded tags from file ---
@@ -348,7 +253,7 @@ const readEmbeddedTags = async (file: File): Promise<IdentificationResult | null
     // Dynamic import to avoid hard dependency when not installed
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    const mm = await loadMusicMetadata();
+    const mm = await import('music-metadata-browser');
     const metadata = await mm.parseBlob(file);
 
     const common = metadata?.common || {};
@@ -379,4 +284,138 @@ const readEmbeddedTags = async (file: File): Promise<IdentificationResult | null
   } catch {
     return null;
   }
+};
+
+const identifyViaServerUpload = async (file: File): Promise<IdentificationResult | null> => {
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/identify/upload', { method: 'POST', body: form });
+    if (!res.ok) {
+      console.warn(`[ID] Server upload endpoint returned ${res.status}`);
+      return null;
+    }
+    const json = await res.json();
+    if (!json.success || !json.data) return null;
+
+    const payload = json.data;
+    return {
+      mbid: payload.mbid || '',
+      title: payload.title || file.name,
+      artist: payload.artist || 'Unknown',
+      album: payload.album || 'Unknown Album',
+      year: payload.year || '',
+      coverUrl: payload.coverUrl,
+      score: payload.score ?? 1,
+      methodUsed: 'fingerprint',
+      duration: payload.duration ?? 0
+    };
+  } catch (error) {
+    console.error('[ID] Server upload fingerprinting failed.', error);
+    return null;
+  }
+};
+
+export const identifyAudioFile = async (
+  file: File,
+  onStatusUpdate?: (status: string) => void
+): Promise<IdentificationResult> => {
+  console.log(`🕵️ Starting Hybrid Identification for: ${file.name}`);
+  onStatusUpdate?.('fingerprinting');
+
+  const ENABLE_FINGERPRINTING = import.meta.env.VITE_ENABLE_FINGERPRINTING !== 'false';
+  const FINGERPRINT_REQUIRED_ERR = 'Fingerprinting disabled. Set VITE_ENABLE_FINGERPRINTING to true.';
+
+  if (!ENABLE_FINGERPRINTING) {
+    console.warn('[ID] Fingerprinting disabled; falling back to fuzzy identification.', FINGERPRINT_REQUIRED_ERR);
+    onStatusUpdate?.('fuzzy_matching');
+    return attemptFuzzyMatch(file, 0);
+  }
+
+  let fingerprint = '';
+  let duration = 0;
+  let fingerprintReady = false;
+
+  try {
+    console.log('[ID] Loading fpcalc-browser module…');
+    // @ts-ignore
+    const fpcalc = await import('fpcalc-browser');
+    console.log('[ID] Module loaded. Generating fingerprint…');
+    const result = await fpcalc.calculate(file);
+    duration = result.duration;
+    fingerprint = result.fingerprint;
+    fingerprintReady = true;
+    console.log(`[ID] Fingerprint generated (${duration.toFixed(2)}s). Hash preview: ${fingerprint.slice(0, 24)}…`);
+  } catch (err) {
+    console.error('[ID] Fingerprinting failed before lookup.', err);
+    console.log('[ID] Attempting server-side fingerprint fallback…');
+    const serverResult = await identifyViaServerUpload(file);
+    if (serverResult) {
+      console.log('[ID] Server-side fingerprint succeeded. Returning metadata.');
+      return serverResult;
+    }
+    console.warn('[ID] No fingerprint available; continuing with fuzzy strategy.');
+    onStatusUpdate?.('fuzzy_matching');
+    return attemptFuzzyMatch(file, 0);
+  }
+
+  onStatusUpdate?.('checking_db');
+  console.log('[ID] Checking internal cache via /api/identify…');
+  try {
+    const res = await fetch('/api/identify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fingerprint, duration })
+    });
+    console.log(`[ID] Cache response: ${res.status}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success) {
+        console.log('✅ Cache hit. Returning stored metadata.');
+        return {
+          ...json.data,
+          score: 1.0,
+          methodUsed: 'cache',
+          duration
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('[ID] Internal cache lookup failed, proceeding to external.', e);
+  }
+
+  onStatusUpdate?.('checking_external');
+  console.log('[ID] Querying AcoustID…');
+  try {
+    const url = `https://api.acoustid.org/v2/lookup?client=${ACOUSTID_API_KEY}&meta=recordings+releases&duration=${Math.floor(duration)}&fingerprint=${fingerprint}`;
+    const res = await fetch(url);
+    console.log(`[ID] AcoustID response: ${res.status}`);
+    const data = await res.json();
+    if (data.results && data.results.length > 0) {
+      const best = data.results.sort((a: any, b: any) => b.score - a.score)[0];
+      if (best.score > 0.8 && best.recordings?.[0]) {
+        console.log(`✅ AcoustID hit (score ${best.score}).`);
+        const rec = best.recordings[0];
+        const bestRelease = getBestReleaseInfo(rec.releases);
+        return {
+          title: rec.title,
+          artist: rec.artists?.[0]?.name || 'Unknown',
+          album: bestRelease.title,
+          mbid: rec.id,
+          year: bestRelease.year,
+          score: best.score,
+          methodUsed: 'fingerprint',
+          duration,
+          coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300'
+        };
+      }
+    }
+    console.warn('[ID] AcoustID returned no confident matches.');
+  } catch (e) {
+    console.warn('[ID] AcoustID lookup failed.', e);
+  }
+
+  console.warn('[ID] Falling back to fuzzy strategy.');
+  onStatusUpdate?.('fuzzy_matching');
+  return attemptFuzzyMatch(file, duration);
 };

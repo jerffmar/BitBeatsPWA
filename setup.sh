@@ -15,6 +15,7 @@ apt-get update -y
 
 echo "➡️  Installing base packages..."
 apt-get install -y curl git ufw build-essential nginx
+apt-get install -y libchromaprint-tools
 
 if ! command -v node >/dev/null 2>&1 || [[ "$(node -v 2>/dev/null || echo v0)" != v${NODE_MAJOR}* ]]; then
   echo "➡️  Installing Node.js ${NODE_MAJOR}.x..."
@@ -31,6 +32,7 @@ else
 fi
 ufw allow 80 >/dev/null || true
 ufw allow 443 >/dev/null || true
+ufw allow 5173 >/dev/null || true
 ufw --force enable
 
 echo "➡️  Current listening ports:"
@@ -62,6 +64,11 @@ cd "${APP_DIR}"
 
 echo "➡️  Installing npm dependencies..."
 npm ci
+
+echo "➡️  Ensuring music-metadata-browser dependency..."
+if ! npm ls music-metadata-browser >/dev/null 2>&1; then
+  npm install music-metadata-browser --no-save
+fi
 
 echo "➡️  Building frontend..."
 npm run build

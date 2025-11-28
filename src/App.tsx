@@ -445,7 +445,7 @@ function App() {
 
       let offset = 0;
       if (searchFilter === 'SONG') offset = searchResults.catalog.songs.length;
-      if (searchFilter === 'ALBUM') offset = searchResults.catalog.albums.length;
+      if (searchFilter === 'ALBUM' ) offset = searchResults.catalog.albums.length;
       if (searchFilter === 'ARTIST') offset = searchResults.catalog.artists.length;
 
       const moreResults = await searchGlobalCatalog(searchQuery, offset, searchFilter);
@@ -674,7 +674,7 @@ function App() {
                  <div className="flex items-center gap-2 mb-2 text-white font-bold text-sm">
                     <Activity size={16} className="text-brand-500" /> LAN Sync
                  </div>
-                 <p className="text-xs text-gray-400 mb-3">DHT Active. {activePeers} Mesh Peers connected.</p>
+                 <p className="text-xs text-gray-400 mb-3">Local Mesh Active. {activePeers} peers detected.</p>
                  <div className="flex gap-1 justify-center">
                     <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-bounce"></span>
                     <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
@@ -903,7 +903,7 @@ function App() {
                                <h2 className="text-2xl font-bold text-white">Swarm Chatter</h2>
                                <div className="text-xs text-gray-500 flex items-center gap-2">
                                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                                 P2P Mesh Active (Gun.js)
+                                 Local Mesh Online
                                </div>
                              </div>
                              <div className="bg-white/5 rounded-xl p-4 border border-white/5 mb-6">
