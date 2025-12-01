@@ -1,10 +1,10 @@
-const prisma = require('../../prisma/client');
-const SeedService = require('../services/SeedService');
-const path = require('path');
-const fs = require('fs');
+import { PrismaClient } from '@prisma/client';
+import SeedService from '../services/SeedService.js';
+
+const prisma = new PrismaClient();
 const MAX_STORAGE = 10 * 1024 * 1024 * 1024; // 10GB
 
-module.exports.upload = async (req, res) => {
+export const upload = async (req, res) => {
   try {
     const userId = req.user.id;
     const file = req.file;
@@ -51,3 +51,5 @@ module.exports.upload = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+export default { upload };

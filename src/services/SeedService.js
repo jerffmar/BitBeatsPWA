@@ -1,12 +1,10 @@
-const WebTorrent = require('webtorrent-hybrid');
-const path = require('path');
-const fs = require('fs');
+import WebTorrent from 'webtorrent-hybrid';
 
 class SeedService {
   constructor() {
     if (!SeedService.instance) {
       this.client = new WebTorrent();
-      this.seededFiles = new Map(); // filePath -> torrent
+      this.seededFiles = new Map();
       SeedService.instance = this;
     }
     return SeedService.instance;
@@ -15,12 +13,17 @@ class SeedService {
   async seedFile(filePath) {
     return new Promise((resolve, reject) => {
       if (this.seededFiles.has(filePath)) {
-        const torrent = this.seededFiles.get(filePath);
-        return resolve(torrent.magnetURI);
+        return resolve(this.seededFiles.get(filePath).magnetURI);
       }
-      this.client.seed(filePath, (torrent) => {
-        this.seededFiles.set(filePath, torrent);
-        resolve(torrent.magnetURI);
+
+      const torrent = this.client.seed(filePath, (torrentInstance) => {
+        this.seededFiles.set(filePath, torrentInstance);
+        resolve(torrentInstance.magnetURI);
+      });
+
+      torrent.on('error', (err) => {
+        this.seededFiles.delete(filePath);
+        reject(err);
       });
     });
   }
@@ -41,4 +44,4 @@ class SeedService {
   }
 }
 
-module.exports = new SeedService();
+export default new SeedService();

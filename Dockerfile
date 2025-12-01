@@ -1,13 +1,14 @@
-FROM node:18-alpine AS base
+FROM node:18-bullseye-slim AS base
 
 WORKDIR /app
 
-# Install native build tools required for webtorrent-hybrid
-RUN apk add --no-cache python3 make g++ libc6-compat
+RUN apt-get update && \
+    apt-get install -y python3 build-essential openssl && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy package files and install dependencies
 COPY package*.json ./
-RUN npm install --production
+RUN npm install --legacy-peer-deps
 
 # Copy source code
 COPY . .
