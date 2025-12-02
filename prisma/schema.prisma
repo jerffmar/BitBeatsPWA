@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String            @id @default(uuid())
+  email        String            @unique
+  displayName  String?
+  pixKey       String?
+  pixKeyType   String?
+  storageUsed  BigInt            @default(0) @db.BigInt
+  storageLimit BigInt            @default(0) @db.BigInt
+  tracks       Track[]           @relation("UploaderTracks")
+  playback     PlaybackHistory[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+model Genre {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+  tracks      Track[]
+  createdAt   DateTime @default(now())
+}
+
+model Track {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  magnetURI   String    @unique
+  webSeedUrl  String?
+  filePath    String
+  sizeBytes   BigInt    @db.BigInt
+  uploadedAt  DateTime  @default(now())
+  uploaderId  String
+  genreId     String?
+  genre       Genre?    @relation(fields: [genreId], references: [id])
+  uploader    User      @relation("UploaderTracks", fields: [uploaderId], references: [id])
+  playback    PlaybackHistory[]
+  @@index([genreId])
+  @@index([uploaderId])
+}
+
+model PlaybackHistory {
+  id         String   @id @default(uuid())
+  userId     String
+  trackId    String
+  playedAt   DateTime @default(now())
+  durationMs Int?
+  deviceInfo String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track      Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  @@index([userId, playedAt])
+  @@index([trackId, playedAt])
+}

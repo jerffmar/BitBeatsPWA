@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: bitbeats-db
+    restart: always
+    environment:
+      POSTGRES_DB: bitbeats
+      POSTGRES_USER: bitbeats
+      POSTGRES_PASSWORD: change_me
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - bitbeats-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bitbeats"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bitbeats-api
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      TORRENT_PORT: 6881
+      DATABASE_URL: postgres://bitbeats:change_me@db:5432/bitbeats
+      BITBEATS_UPLOAD_DIR: /app/uploads
+    ports:
+      - "3000:3000"
+      - "6881:6881"
+      - "6881:6881/udp"
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - bitbeats-net
+
+volumes:
+  pgdata:
+
+networks:
+  bitbeats-net:
+    driver: bridge
