@@ -8,6 +8,8 @@ declare global {
   }
 }
 
+const logGun = (...args: any[]) => console.debug('[GUN]', ...args);
+
 // Public relay peers for the mesh network
 const LOCAL_RELAY = typeof window !== 'undefined' ? `${window.location.origin}/gun` : null;
 const DEFAULT_PEERS = [
@@ -35,15 +37,18 @@ export const initDB = () => {
   if (!gun) {
     gun = window.Gun({ 
         peers: PEERS,
-        localStorage: false // We maintain manual session persistence for keys, keeping graph in memory/network
+        localStorage: false
     });
-    console.log("🔫 Gun DB Initialized - Connected to Swarm");
+    logGun('initDB', { peers: PEERS });
   }
   return gun;
 };
 
 export const getGun = () => {
-    if (!gun) return initDB();
+    if (!gun) {
+      logGun('getGun -> init');
+      return initDB();
+    }
     return gun;
 };
 
@@ -52,8 +57,7 @@ export const getGun = () => {
 export const subscribeToTracks = (callback: (track: Track) => void) => {
     const db = getGun();
     if (!db) return;
-
-    // Subscribe to the 'bitbeats/v1/tracks' node
+    logGun('subscribeToTracks');
     db.get('bitbeats').get('v1').get('tracks').map().on((data: any, id: string) => {
         if (data && data.title && data.audioUrl) {
             callback({
@@ -92,6 +96,7 @@ export const publishTrackMetadata = async (track: Partial<Track>) => {
 
     // Index by ID
     db.get('bitbeats').get('v1').get('tracks').get(trackId).put(trackData);
+    logGun('publishTrackMetadata', { trackId, uploadedBy: user.is.pub });
     
     // Also link to user profile (optional, for future "My Uploads" view)
     user.get('uploads').set(db.get('bitbeats').get('v1').get('tracks').get(trackId));
@@ -102,7 +107,7 @@ export const publishTrackMetadata = async (track: Partial<Track>) => {
 export const subscribeToPosts = (callback: (post: SocialPost) => void) => {
     const db = getGun();
     if (!db) return;
-    
+    logGun('subscribeToPosts');
     // Subscribe to the 'bitbeats/v1/social' node
     db.get('bitbeats').get('v1').get('social').map().on((data: any, id: string) => {
         if(data && data.content && data.author) {
@@ -129,6 +134,7 @@ export const publishPost = async (author: string, content: string, trackId?: str
     };
     
     db.get('bitbeats').get('v1').get('social').set(post);
+    logGun('publishPost', { author, trackId });
 };
 
 // --- BOUNTIES ---
@@ -136,7 +142,7 @@ export const publishPost = async (author: string, content: string, trackId?: str
 export const subscribeToBounties = (callback: (bounty: Bounty) => void) => {
     const db = getGun();
     if (!db) return;
-
+    logGun('subscribeToBounties');
     db.get('bitbeats').get('v1').get('bounties').map().on((data: any, id: string) => {
         if(data && data.query) {
             callback({
@@ -166,6 +172,7 @@ export const createBounty = async (mbid: string | undefined, query: string, rewa
     };
 
     db.get('bitbeats').get('v1').get('bounties').set(bounty);
+    logGun('createBounty', { mbid, query, reward });
 };
 
 // --- LISTEN PARTIES ---
@@ -173,7 +180,7 @@ export const createBounty = async (mbid: string | undefined, query: string, rewa
 export const subscribeToParties = (callback: (party: ListenParty) => void) => {
     const db = getGun();
     if (!db) return;
-
+    logGun('subscribeToParties');
     db.get('bitbeats').get('v1').get('parties').map().on((data: any, id: string) => {
         if(data && data.host) {
             callback({
@@ -199,6 +206,7 @@ export const createParty = async (host: string, currentTrackId: string) => {
         participants: 1,
         status: 'PLAYING'
     });
+    logGun('createParty', { partyId, host, currentTrackId });
 };
 
 // --- USER CREDITS ---
@@ -222,4 +230,5 @@ export const updateUserCredits = (amount: number) => {
     // Note: Insecure for real money. Client can manipulate. 
     // Requires Consensus/Smart Contract for real security.
     user.get('credits').put(amount);
+    logGun('updateUserCredits', { pub: user.is.pub, amount });
 };

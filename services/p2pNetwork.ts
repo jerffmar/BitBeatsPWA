@@ -2,6 +2,8 @@ import type { UserStats } from '../types.ts';
 import { getGun } from './db.ts';
 import { getKeyPair } from './auth.ts';
 
+const logGunNet = (...args: any[]) => console.debug('[GUN][NET]', ...args);
+
 /**
  * P2P NETWORK SERVICE
  * Simulates the complex interactions of WebTorrent and Gun.js
@@ -29,7 +31,9 @@ export const discoverLocalPeers = async (): Promise<number> => {
     const peers = gun._.opt.peers;
     if (!peers) return 0;
     
-    return Object.keys(peers).length;
+    const count = Object.keys(peers).length;
+    logGunNet('discoverLocalPeers', { peers: count, peerKeys: Object.keys(peers) });
+    return count;
 };
 
 // --- Crypto Signing (Real SEA) ---
@@ -41,9 +45,8 @@ export const signUpload = async (fileBlob: Blob, dataToSign: string): Promise<st
     if (!window.SEA) throw new Error("SEA not loaded");
 
     console.log("🔐 Signing content with Ed25519...");
-    
-    // We sign the hash/metadata of the upload
     const signature = await window.SEA.sign(dataToSign, pair);
+    logGunNet('signUpload', { size: fileBlob.size, dataToSignLen: dataToSign.length });
     return signature;
 };
 
