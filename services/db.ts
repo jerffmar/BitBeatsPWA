@@ -10,48 +10,8 @@ declare global {
 
 const logGun = (...args: any[]) => console.debug('[GUN]', ...args);
 
-const buildPeers = () => {
-  const peers: string[] = [];
-  const isHttps = typeof window !== 'undefined' && window.location?.protocol === 'https:';
-  const protocol = isHttps ? { http: 'https', ws: 'wss' } : { http: 'http', ws: 'ws' };
-
-  const forceSecure = (url: string) => {
-    if (!isHttps) return url;
-    return url
-      .replace(/^http:/i, 'https:')
-      .replace(/^ws:/i, 'wss:');
-  };
-
-  if (typeof window !== 'undefined' && window.location) {
-    const origin = window.location.origin.replace(/^https?/, protocol.http);
-    peers.push(`${origin}/gun`);
-    peers.push(origin.replace(/^http/, protocol.ws) + '/gun');
-  }
-
-  // Local relay only in HTTP (avoid mixed content in HTTPS)
-  if (!isHttps) {
-    peers.push(`${protocol.http}://localhost:8765/gun`, `${protocol.ws}://localhost:8765/gun`);
-  }
-
-  // Remote relays were causing repeated failed WSS dials; rely on explicit VITE_GUN_PEERS instead
-  //   const remoteHosts = [ ... ];
-  //   remoteHosts.forEach(...) // removed
-
-  return Array.from(new Set(peers.filter(Boolean)));
-};
-
-const DEFAULT_PEERS = buildPeers();
-
-const envPeers =
-  (import.meta as any).env?.VITE_GUN_PEERS?.split(',')
-    .map((p: string) => p.trim())
-    .filter(Boolean)
-    .map((p: string) => {
-      const isHttps = typeof window !== 'undefined' && window.location?.protocol === 'https:';
-      return isHttps ? p.replace(/^http:/i, 'https:').replace(/^ws:/i, 'wss:') : p;
-    }) || [];
-
-const PEERS = envPeers.length ? envPeers : DEFAULT_PEERS;
+// Force a single hosted relay. Remove any local/same-origin relay attempts to avoid mixed-content or repeated failed wss dials.
+const PEERS = ['https://bitbeatsrelay.duckdns.org/gun'];
 
 let gun: any;
 

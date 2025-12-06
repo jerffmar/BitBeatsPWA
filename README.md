@@ -81,11 +81,10 @@ npm run dev
 MIT
 
 ## 🔌 Gun Relay Reliability
-- Default peers now include `/gun` and auto-detect a same-origin relay at `<your-domain>/gun` (for you: `https://bitbeats-hcx1.onrender.com/gun`).
-- To point at your own relay, set `VITE_GUN_PEERS` (comma-separated):
-  - Example: `VITE_GUN_PEERS=https://bitbeats-hcx1.onrender.com/gun`
-- Run your own relay (local or server): `PORT=8765 npm run relay` (Gun will serve WebSockets at `/gun`).
-- If deploying behind a reverse proxy (e.g., Nginx/Render), proxy `/gun` to the relay process and forward WebSocket upgrade headers.
+- The client is configured to use the hosted relay: https://bitbeatsrelay.duckdns.org/gun
+- To point at a different relay (not recommended unless you host your own), set VITE_GUN_PEERS explicitly (comma-separated).
+  - Example: `VITE_GUN_PEERS=https://your-relay.example.com/gun`
+- We no longer proxy /gun or auto-start a local relay by default. If you run a private relay, ensure it’s proxied with WebSocket upgrade headers and update VITE_GUN_PEERS accordingly.
 
 ## 🖥️ Single-Server Setup (Frontend + API + Gun Relay)
 - This repo runs all services on one host.
