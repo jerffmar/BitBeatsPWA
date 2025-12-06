@@ -8,6 +8,7 @@ DB_PASS="bitbeats_secure_password"
 DB_NAME="bitbeats_db"
 NODE_PORT=3001
 NGINX_PORT=80
+GUN_PORT=8765
 
 log(){ echo -e "\033[0;32m[$(date +'%H:%M:%S')] $1\033[0m"; }
 warn(){ echo -e "\033[1;33m[WARN] $1\033[0m"; }
@@ -292,6 +293,8 @@ npm run build
 log "7) Configure PM2..."
 pm2 delete bitbeats-api 2>/dev/null || true
 pm2 start src/server/index.ts --name bitbeats-api --interpreter="$(which node)" --node-args="--import tsx" --env production
+pm2 delete gun-relay 2>/dev/null || true
+pm2 start scripts/gun-relay.mjs --name gun-relay --interpreter="$(which node)" --env "PORT=${GUN_PORT}" --env "HOST=0.0.0.0"
 pm2 save
 
 log "8) Configure Nginx reverse proxy..."
@@ -305,6 +308,15 @@ server {
 
     gzip on;
     gzip_types text/plain text/css application/json application/javascript;
+
+    location /gun {
+        proxy_pass http://127.0.0.1:${GUN_PORT}/gun;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
 
     location /api {
         proxy_pass http://localhost:${NODE_PORT};

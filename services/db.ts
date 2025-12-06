@@ -10,15 +10,27 @@ declare global {
 
 const logGun = (...args: any[]) => console.debug('[GUN]', ...args);
 
-// Public relay peers for the mesh network
-const LOCAL_RELAY = typeof window !== 'undefined' ? `${window.location.origin}/gun` : null;
-const DEFAULT_PEERS = [
-  LOCAL_RELAY, // same-origin relay if hosted (e.g., your Render instance pointing to /gun)
-  'https://bitbeats-hcx1.onrender.com/gun', // Render relay
-  'https://peer.wallie.io/gun',
-  'https://gundb-relay-mlccl.ondigitalocean.app/gun',
-  'https://plato.design/gun'
-].filter(Boolean);
+// Build peers from environment and same-origin
+const buildPeers = () => {
+  const peers: string[] = [];
+  if (typeof window !== 'undefined' && window.location) {
+    const origin = window.location.origin;
+    // Prefer HTTP(S) URL (Gun will negotiate WS)
+    peers.push(`${origin}/gun`);
+    // Explicit WS/WSS endpoint for environments that require it
+    peers.push(origin.replace(/^http/, 'ws') + '/gun');
+  }
+  peers.push(
+    'https://bitbeats-hcx1.onrender.com/gun',
+    'https://peer.wallie.io/gun',
+    'https://gundb-relay-mlccl.ondigitalocean.app/gun',
+    'https://plato.design/gun'
+  );
+  // Dedup and drop falsy
+  return Array.from(new Set(peers.filter(Boolean)));
+};
+
+const DEFAULT_PEERS = buildPeers();
 
 const envPeers =
   (import.meta as any).env?.VITE_GUN_PEERS?.split(',')
@@ -39,7 +51,7 @@ export const initDB = () => {
         peers: PEERS,
         localStorage: false
     });
-    logGun('initDB', { peers: PEERS });
+    logGun('initDB peers', PEERS);
   }
   return gun;
 };

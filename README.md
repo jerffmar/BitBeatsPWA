@@ -86,3 +86,11 @@ MIT
   - Example: `VITE_GUN_PEERS=https://bitbeats-hcx1.onrender.com/gun`
 - Run your own relay (local or server): `PORT=8765 npm run relay` (Gun will serve WebSockets at `/gun`).
 - If deploying behind a reverse proxy (e.g., Nginx/Render), proxy `/gun` to the relay process and forward WebSocket upgrade headers.
+
+## 🖥️ Single-Server Setup (Frontend + API + Gun Relay)
+- This repo runs all services on one host.
+- Relay: `npm run relay` (or PM2) binds to `/gun` (default port 8765). Nginx proxies `/gun -> 127.0.0.1:8765/gun`.
+- API: `npm start` serves Express on `PORT` (default 3001) with SPA fallback from `dist`.
+- Frontend: `npm run build` outputs `dist`, served by Nginx root.
+- Override peers via `VITE_GUN_PEERS` if you host a different relay.
+- Ensure WebSockets are enabled on your proxy (Upgrade/Connection headers forwarded).

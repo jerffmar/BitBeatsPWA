@@ -4,6 +4,7 @@ import 'gun/axe.js';
 import http from 'http';
 
 const PORT = process.env.PORT || 8765;
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Serve the Gun endpoint at /gun (WebSocket + HTTP fallback)
 const server = http.createServer(Gun.serve);
@@ -15,6 +16,6 @@ Gun({
   axe: true
 });
 
-server.listen(PORT, () => {
-  console.log(`🚀 Gun relay running at http://localhost:${PORT}/gun`);
+server.listen(PORT, HOST, () => {
+  console.log(`🚀 Gun relay running at http://${HOST}:${PORT}/gun`);
 });
