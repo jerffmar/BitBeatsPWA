@@ -5,7 +5,8 @@ import {
   Wifi, HardDrive, Share2, Download, Radio, Volume2, User, 
   Disc, Users, Zap, Shield, Mic2, Settings, Trash2, Heart,
   Globe, Activity, LogOut, Send, MessageSquare, Check, X, FileAudio,
-  Database, AlertCircle, Music, Layers, Mic, Tag, ArrowDown, Loader
+  Database, AlertCircle, Music, Layers, Mic, Tag, ArrowDown, Loader,
+  Menu   // <-- added Menu icon
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -14,7 +15,7 @@ import { Track, LibraryEntry, UserStats, StorageConfig, User as UserType, Social
 import { calculateRatio } from './services/mockData';
 import { saveToVault, loadFromVault, checkVaultStatus, getStoredBytes, runSmartEviction, exportTrack, opfsSupported } from './services/storage.ts';
 import { getReputation, discoverLocalPeers, signUpload } from './services/p2pNetwork';
-import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties, publishTrackMetadata, subscribeToTracks, subscribeToParties, subscribeToCredits, createParty } from './services/db';
+import { initDB, subscribeToPosts, publishPost, createBounty, subscribeToBounties, publishTrackMetadata, subscribeToTracks, subscribeToParties, subscribeToCredits, createParty, publishTrackWithBlob } from './services/db';
 import { initTorrentClient, seedFile, addTorrent, getTorrentStats } from './services/torrent';
 import { analyzeAudio, normalizeAndTranscode } from './services/audioEngine';
 import { searchGlobalCatalog, SearchResults, DetailedMetadata } from './services/musicBrainz';
@@ -185,6 +186,9 @@ function App() {
     reputation: 'Member',
     credits: 0
   });
+
+  // NEW: mobile sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // --- Auth Check ---
   useEffect(() => {
@@ -373,8 +377,9 @@ function App() {
               artistSignature: signature
           };
 
-          // 5. Publish Metadata to Gun.js Swarm
-          await publishTrackMetadata(newTrack);
+          // 5. Publish Metadata to Gun.js Swarm AND archive full audio on relay
+          const arrayBuffer = await processedBlob.arrayBuffer();
+          await publishTrackWithBlob(newTrack, arrayBuffer, processedFile.type);
 
           // 6. Save to Local Vault (OPFS) immediately
           // Note: publishTrackMetadata creates the ID but we need it here. 
@@ -384,7 +389,6 @@ function App() {
           
           // Let's manually generate an ID to ensure instant local availability
           const tempId = `local_${Date.now()}`;
-          const arrayBuffer = await processedBlob.arrayBuffer();
           await saveToVault(tempId, arrayBuffer); // Save normalized audio
 
           // Update Library State Optimistically
@@ -562,7 +566,7 @@ function App() {
     const isActive = location.pathname === path;
     return (
         <button 
-        onClick={() => navigate(path)}
+        onClick={() => { navigate(path); setSidebarOpen(false); }} // close mobile drawer on navigation
         className={clsx(
             "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
             isActive ? "bg-brand-500/10 text-brand-500 border border-brand-500/20" : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -648,6 +652,13 @@ function App() {
                 </div>
            </div>
            <RatioBadge stats={stats} />
+        </div>
+
+        {/* Mobile menu button */}
+        <div className="md:hidden mr-2">
+          <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-md text-gray-300 hover:bg-white/5">
+            <Menu size={20} />
+          </button>
         </div>
       </header>
 
@@ -1062,6 +1073,53 @@ function App() {
              <Volume2 size={20} className="text-gray-400 hidden sm:block" />
          </div>
       </div>
+
+      {/* --- Mobile Drawer --- */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+          {/* Drawer */}
+          <div className="absolute left-0 top-0 bottom-0 w-80 bg-dark-surface p-4 overflow-y-auto shadow-2xl">
+             <div className="flex items-center justify-between mb-4">
+               <div className="flex items-center gap-3">
+                 <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-black font-bold text-xs">
+                   {initials}
+                 </div>
+                 <div>
+                   <div className="text-sm font-bold text-white truncate">{displayName}</div>
+                   <div className="text-xs text-gray-400">{displayHandle}</div>
+                 </div>
+               </div>
+               <button onClick={() => setSidebarOpen(false)} className="text-gray-400 p-2 rounded hover:bg-white/5">
+                 <X size={18} />
+               </button>
+             </div>
+
+             {/* Reuse same nav items as desktop */}
+             <nav className="space-y-1">
+               <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Browse</div>
+               <NavItem path="/" icon={Radio} label="Discovery" />
+               <NavItem path="/bounties" icon={Zap} label="Bounty Board" />
+               <NavItem path="/swarm" icon={Users} label="Swarm Social" />
+               <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-6 mb-3">My Collection</div>
+               <NavItem path="/library" icon={HardDrive} label="My Library" />
+             </nav>
+
+             {/* Optional install / lan box */}
+             <div className="mt-6">
+               {deferredPrompt && (
+                 <button onClick={handleInstallClick} className="w-full bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg p-3 text-left">
+                   <div className="flex items-center gap-2 text-brand-500 font-bold text-sm mb-1">
+                     <Download size={16} /> Install App
+                   </div>
+                   <p className="text-xs text-gray-400">Get the native desktop experience.</p>
+                 </button>
+               )}
+             </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

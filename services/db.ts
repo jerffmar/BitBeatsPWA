@@ -83,10 +83,23 @@ export const subscribeToTracks = (callback: (track: Track) => void) => {
     });
 };
 
-export const publishTrackMetadata = async (track: Partial<Track>) => {
+// --- NEW Helper: ArrayBuffer -> base64 (browser-friendly) ---
+const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...Array.from(chunk));
+  }
+  return btoa(binary);
+};
+
+// --- Modified publishTrackMetadata to return trackId ---
+export const publishTrackMetadata = async (track: Partial<Track>): Promise<string | null> => {
     const db = getGun();
     const user = db.user();
-    if (!db || !user.is) return;
+    if (!db || !user.is) return null;
 
     const trackId = 't_' + Math.random().toString(36).substr(2, 9);
     
@@ -109,6 +122,71 @@ export const publishTrackMetadata = async (track: Partial<Track>) => {
       replicateToRelay(['tracks', trackId], { id: trackId, ...trackData });
     } catch (e) {
       console.warn('Failed to replicate track to relay', e);
+    }
+
+    return trackId;
+};
+
+// --- NEW: publishTrackWithBlob ---
+// Publishes metadata and archives the audio file (base64) under relay_archive so the relay stores the full track.
+export const publishTrackWithBlob = async (track: Partial<Track>, audioArrayBuffer?: ArrayBuffer, mimeType = 'audio/wav'): Promise<string | null> => {
+  try {
+    const trackId = await publishTrackMetadata(track);
+    if (!trackId) return null;
+
+    if (audioArrayBuffer) {
+      try {
+        const b64 = arrayBufferToBase64(audioArrayBuffer);
+        const size = audioArrayBuffer.byteLength;
+        // Store a file node under relay archive
+        replicateToRelay(['tracks', trackId, 'file'], {
+          id: trackId,
+          mime: mimeType,
+          size,
+          data: b64,
+          archivedAt: Date.now()
+        });
+        logGun('publishTrackWithBlob: archived file to relay', { trackId, size });
+      } catch (err) {
+        console.warn('Failed to archive audio blob to relay for', trackId, err);
+      }
+    }
+
+    return trackId;
+  } catch (err) {
+    console.error('publishTrackWithBlob error', err);
+    return null;
+  }
+};
+
+export const publishTrack = async (track: Partial<Track>, audioFile?: File) => {
+    // For local dev, just replicate to relay directly
+    if (import.meta.env.MODE === 'development' && audioFile) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const arrayBuffer = e.target?.result;
+        if (arrayBuffer) {
+          // Publish metadata only (no file)
+          const trackId = await publishTrackMetadata({ ...track, id: undefined });
+          try {
+            // Replicate the file blob directly to the relay archive
+            replicateToRelay(['tracks', trackId, 'file'], {
+              id: trackId,
+              mime: audioFile.type,
+              size: audioFile.size,
+              data: arrayBufferToBase64(arrayBuffer),
+              archivedAt: Date.now()
+            });
+            logGun('publishTrack (dev): replicated file blob to relay', { trackId, size: audioFile.size });
+          } catch (e) {
+            console.warn('Failed to replicate file blob to relay', e);
+          }
+        }
+      };
+      reader.readAsArrayBuffer(audioFile);
+    } else {
+      // Production: use the full publish flow with metadata + blob
+      return publishTrackWithBlob(track, audioFile ? await audioFile.arrayBuffer() : undefined, audioFile?.type);
     }
 };
 
