@@ -7,7 +7,7 @@ DB_USER="bitbeats_user"
 DB_PASS="bitbeats_secure_password"
 DB_NAME="bitbeats_db"
 NODE_PORT=3001
-NGINX_PORT=10000
+NGINX_PORT=80
 
 log(){ echo -e "\033[0;32m[$(date +'%H:%M:%S')] $1\033[0m"; }
 warn(){ echo -e "\033[1;33m[WARN] $1\033[0m"; }
@@ -257,7 +257,7 @@ app.use(express.json());
 // API routes
 app.post('/api/identify', identifyHandler);
 
-// Placeholder fallback routes (extend with other controllers as needed)
+// Placeholder /api routes (extend as needed)
 app.get('/api/search', (_req, res) => res.json({ songs: [] }));
 app.get('/api/recording/:mbid', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
@@ -327,6 +327,7 @@ sudo systemctl reload nginx
 
 log "9) Configure UFW..."
 sudo ufw allow ${NGINX_PORT}/tcp
+sudo ufw allow 443/tcp
 sudo ufw allow ssh
 echo "y" | sudo ufw --force enable || true
 
