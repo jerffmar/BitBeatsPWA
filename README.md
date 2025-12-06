@@ -77,6 +77,11 @@ npm run dev
 
 **Note:** The `fpcalc-browser` package requires WASM support. Ensure your dev server serves `.wasm` files with the correct MIME type.
 
+## 📱 PWA & Permissions
+- Served over HTTPS with `manifest.webmanifest` and `service-worker.js` registered at load.
+- Persistent storage: the app requests `navigator.storage.persist()` so OPFS content survives eviction.
+- Bluetooth: a UI toggle requests Bluetooth device access (for future features). Chrome/Edge Android required; unsupported browsers will see a fallback message.
+
 ## 📄 License
 MIT
 

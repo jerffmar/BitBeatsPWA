@@ -189,9 +189,12 @@ function App() {
 
   // NEW: mobile sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [persistenceSupported, setPersistenceSupported] = useState(false);
+  const [persistenceGranted, setPersistenceGranted] = useState<boolean | null>(null);
+  const [btStatus, setBtStatus] = useState<'idle' | 'granted' | 'unavailable' | 'denied'>('idle');
 
   // NEW: connection helpers for sidebar buttons
-  const [connecting, setConnecting] = useState(false);
   const handleConnectClick = async () => {
     try {
       setConnecting(true);
@@ -632,6 +635,37 @@ function App() {
   const displayHandle = user?.handle || ('@' + (user?.username || 'user'));
   const initials = (displayName.substring(0, 2) || 'US').toUpperCase();
 
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js').catch(console.error);
+    }
+    if (navigator.storage?.persist) {
+      setPersistenceSupported(true);
+      navigator.storage.persisted().then(setPersistenceGranted).catch(() => setPersistenceGranted(false));
+    }
+  }, []);
+
+  const handleRequestPersistence = async () => {
+    if (!navigator.storage?.persist) return setPersistenceGranted(false);
+    const granted = await navigator.storage.persist();
+    setPersistenceGranted(granted);
+    if (!granted) alert('Persistent storage was not granted.');
+  };
+
+  const handleRequestBluetooth = async () => {
+    if (!navigator.bluetooth) {
+      setBtStatus('unavailable');
+      alert('Bluetooth not supported on this device/browser.');
+      return;
+    }
+    try {
+      await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+      setBtStatus('granted');
+    } catch (e) {
+      setBtStatus('denied');
+    }
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-dark-bg px-4">
@@ -780,6 +814,28 @@ function App() {
                   </button>
                  </div>
                </div>
+               <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mt-4">
+               <div className="flex items-center justify-between mb-2">
+                 <div className="text-white font-bold text-sm">Permissions</div>
+                 <span className="text-[10px] text-gray-500">PWA Ready</span>
+               </div>
+               <div className="space-y-2 text-xs text-gray-300">
+                 {persistenceSupported && (
+                   <button
+                     onClick={handleRequestPersistence}
+                     className="w-full bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-left"
+                   >
+                     Persistent Storage: {persistenceGranted ? 'Enabled' : 'Enable'}
+                   </button>
+                 )}
+                 <button
+                   onClick={handleRequestBluetooth}
+                   className="w-full bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-left"
+                 >
+                   Bluetooth Access: {btStatus === 'granted' ? 'Granted' : 'Request'}
+                 </button>
+               </div>
+             </div>
            </div>
         </aside>
 

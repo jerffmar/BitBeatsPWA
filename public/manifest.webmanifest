@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "BitBeats",
+  "short_name": "BitBeats",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f0f11",
+  "theme_color": "#0f0f11",
+  "description": "BitBeats PWA — decentralized music streaming with offline vault.",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAIAAABWESUoAAAABmJLR0QA/wD/AP+gvaeTAAAA/UlEQVR4nO3SQQqDMBAF0eL9n9m4cxQFCpbEwXS7knlUOvOdQvdL21/3vfzHACAgICAgICAgICAgICAgICAgICAgICAgICAgICCgfv6dJfFWWopjqjPXadFYqZqonFUZqtbppDRlJVp0UWY6qkhFzGpKqTUTUfY6iqiTFUZarZpHRlJVq0UWY6qkpHTG5KqzUTUnU6yqaHNVJauZoHRVNVo0UVY6aohHTGpKqzURUnU6SqbHNUpauZIHQ1NWp0UVY6aoiHTG5KqzUR0nU6SqbHNUpauZoHR1NWp0UVW6aoj+ADQqmTnHKRCVAAAAAElFTkSuQmCC",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAAABmJLR0QA/wD/AP+gvaeTAAAB30lEQVR4nO3TsQ3CMBBAUR3n/3+ypZDKeGtGQimAuuWkYm3Tnrp8N2k9awAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwDvuM1/5n2r33xZftAOo6QFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFUdICqOkBVDaAqh5AVQ2gKoOQFXfBz7jMf+YV0dt0gHqOgBVDaAqh5AVQ2gKoeQFQNAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMF8BH+SWDWfz9HAAAAAElFTkSuQmCC",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

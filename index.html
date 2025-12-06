@@ -66,6 +66,9 @@
         -webkit-tap-highlight-color: transparent;
       }
     </style>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <script type="importmap">
 {
   "imports": {
@@ -88,5 +91,12 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js').catch(console.error);
+        });
+      }
+    </script>
   </body>
 </html>
