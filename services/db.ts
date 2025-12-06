@@ -10,10 +10,17 @@ declare global {
 
 const logGun = (...args: any[]) => console.debug('[GUN]', ...args);
 
-// Build peers from environment and same-origin
 const buildPeers = () => {
   const peers: string[] = [];
-  const protocol = (typeof window !== 'undefined' && window.location?.protocol === 'https:') ? { http: 'https', ws: 'wss' } : { http: 'http', ws: 'ws' };
+  const isHttps = typeof window !== 'undefined' && window.location?.protocol === 'https:';
+  const protocol = isHttps ? { http: 'https', ws: 'wss' } : { http: 'http', ws: 'ws' };
+
+  const forceSecure = (url: string) => {
+    if (!isHttps) return url;
+    return url
+      .replace(/^http:/i, 'https:')
+      .replace(/^ws:/i, 'wss:');
+  };
 
   if (typeof window !== 'undefined' && window.location) {
     const origin = window.location.origin.replace(/^https?/, protocol.http);
@@ -21,17 +28,23 @@ const buildPeers = () => {
     peers.push(origin.replace(/^http/, protocol.ws) + '/gun');
   }
 
-  // Local relay only when not under HTTPS (to avoid mixed-content/cert errors)
-  if (protocol.http === 'http') {
+  // Local relay only in HTTP (avoid mixed content in HTTPS)
+  if (!isHttps) {
     peers.push(`${protocol.http}://localhost:8765/gun`, `${protocol.ws}://localhost:8765/gun`);
   }
 
-  peers.push(
-    'http://bitbeats-hcx1.onrender.com/gun',
-    'http://peer.wallie.io/gun',
-    'http://gundb-relay-mlccl.ondigitalocean.app/gun',
-    'http://plato.design/gun'
-  );
+  // Remote relays (use secure schemes when on HTTPS)
+  const remoteHosts = [
+    'bitbeats-hcx1.onrender.com/gun',
+    'peer.wallie.io/gun',
+    'gundb-relay-mlccl.ondigitalocean.app/gun',
+    'plato.design/gun'
+  ];
+  remoteHosts.forEach(host => {
+    peers.push(forceSecure(`${protocol.http}://${host}`));
+    peers.push(forceSecure(`${protocol.ws}://${host}`));
+  });
+
   return Array.from(new Set(peers.filter(Boolean)));
 };
 
@@ -40,7 +53,11 @@ const DEFAULT_PEERS = buildPeers();
 const envPeers =
   (import.meta as any).env?.VITE_GUN_PEERS?.split(',')
     .map((p: string) => p.trim())
-    .filter(Boolean) || [];
+    .filter(Boolean)
+    .map((p: string) => {
+      const isHttps = typeof window !== 'undefined' && window.location?.protocol === 'https:';
+      return isHttps ? p.replace(/^http:/i, 'https:').replace(/^ws:/i, 'wss:') : p;
+    }) || [];
 
 const PEERS = envPeers.length ? envPeers : DEFAULT_PEERS;
 
