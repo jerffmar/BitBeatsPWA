@@ -490,7 +490,7 @@ function App() {
 
       let offset = 0;
       if (searchFilter === 'SONG') offset = searchResults.catalog.songs.length;
-      if (searchFilter === 'ALBUM'') offset = searchResults.catalog.albums.length;
+      if (searchFilter === 'ALBUM') offset = searchResults.catalog.albums.length; // fixed quote
       if (searchFilter === 'ARTIST') offset = searchResults.catalog.artists.length;
 
       const moreResults = await searchGlobalCatalog(searchQuery, offset, searchFilter);
