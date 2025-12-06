@@ -593,8 +593,24 @@ function App() {
   const initials = (displayName.substring(0, 2) || 'US').toUpperCase();
 
   if (!user) {
-    return <AuthScreen onLogin={setUser} />;
-  }
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-dark-bg px-4">
+        <div className="w-full max-w-md">
+          {deferredPrompt && (
+            <div className="mb-4 flex justify-center">
+              <button
+                onClick={handleInstallClick}
+                className="w-full bg-brand-500 text-black px-4 py-2 rounded-lg font-bold shadow-md hover:bg-brand-400 transition"
+              >
+                Install BitBeats App
+              </button>
+            </div>
+          )}
+          <AuthScreen onLogin={setUser} />
+        </div>
+      </div>
+    );
+   }
 
   return (
     <div className="flex flex-col h-screen bg-dark-bg text-gray-200 overflow-hidden font-sans select-none">
@@ -1038,7 +1054,7 @@ function App() {
             </div>
          </div>
 
-         <div className="flex items-center justify-end gap-3 w-1/3">
+         <div className="flex items-center justify-end gap-3 w-1/3"></div>
              <div className="hidden md:flex items-center gap-2 text-brand-500 bg-brand-500/10 px-3 py-1 rounded-full text-xs font-bold border border-brand-500/20">
                <div className="w-2 h-2 bg-brand-500 rounded-full animate-pulse"></div>
                {currentTrack && library[currentTrack.id]?.status === 'SEEDING' ? 'SEEDING' : 'NET OK'}
