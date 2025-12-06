@@ -181,11 +181,22 @@ function App() {
     credits: 0
   });
 
+  // Auth
+  const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
   // --- Auth Check ---
   useEffect(() => {
-    getSession().then(session => {
+    getSession()
+      .then(session => {
         if (session) setUser(session);
-    });
+        setAuthError(null);
+      })
+      .catch((err) => {
+        console.error('getSession failed', err);
+        setAuthError('Unable to load session. Please retry login.');
+      })
+      .finally(() => setAuthReady(true));
   }, []);
 
   // --- PWA Install Prompt ---
@@ -582,8 +593,29 @@ function App() {
       </button>
   );
 
+  if (!authReady) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-dark-bg text-gray-300">
+        <div className="flex items-center gap-3">
+          <Loader className="animate-spin" size={20} />
+          <span>Loading session...</span>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
-    return <AuthScreen onLogin={setUser} />;
+    return (
+      <div className="relative">
+        {authError && (
+          <div className="absolute top-0 inset-x-0 px-4 py-3 bg-red-500/10 border border-red-500/30 text-red-200 flex items-center gap-2">
+            <AlertCircle size={16} />
+            <span className="text-sm">{authError}</span>
+          </div>
+        )}
+        <AuthScreen onLogin={setUser} />
+      </div>
+    );
   }
 
   return (
