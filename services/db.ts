@@ -20,6 +20,9 @@ const buildPeers = () => {
     // Explicit WS/WSS endpoint for environments that require it
     peers.push(origin.replace(/^http/, 'ws') + '/gun');
   }
+  // Local development relay (client-side can reach a local node)
+  peers.push('http://localhost:8765/gun', 'ws://localhost:8765/gun');
+
   peers.push(
     'https://bitbeats-hcx1.onrender.com/gun',
     'https://peer.wallie.io/gun',

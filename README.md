@@ -90,6 +90,7 @@ MIT
 ## 🖥️ Single-Server Setup (Frontend + API + Gun Relay)
 - This repo runs all services on one host.
 - Relay: `npm run relay` (or PM2) binds to `/gun` (default port 8765). Nginx proxies `/gun -> 127.0.0.1:8765/gun`.
+- Local relay option: run `npm run relay` locally; the client will auto-try `http://localhost:8765/gun` / `ws://localhost:8765/gun`.
 - API: `npm start` serves Express on `PORT` (default 3001) with SPA fallback from `dist`.
 - Frontend: `npm run build` outputs `dist`, served by Nginx root.
 - Override peers via `VITE_GUN_PEERS` if you host a different relay.
