@@ -1,8 +1,5 @@
-```prisma
-// Datasource & generator definitions
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -188,4 +185,3 @@ model User {
   likedAlbums  UserLikedAlbum[]
   likedTracks  UserLikedTrack[]
 }
-```
