@@ -190,6 +190,34 @@ function App() {
   // NEW: mobile sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // NEW: connection helpers for sidebar buttons
+  const [connecting, setConnecting] = useState(false);
+  const handleConnectClick = async () => {
+    try {
+      setConnecting(true);
+      const peers = await discoverLocalPeers();
+      setActivePeers(peers);
+      // small feedback
+      alert(`Connected to ${peers} local mesh peer(s).`);
+    } catch (err) {
+      console.error('Connect failed', err);
+      alert('Failed to connect. See console.');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleRunDiagnostics = async () => {
+    try {
+      const peers = await discoverLocalPeers();
+      alert(`Diagnostics: ${peers} mesh peer(s) detected. Check console for details.`);
+      console.debug('Peer discovery result', peers);
+    } catch (err) {
+      console.error('Diagnostics failed', err);
+      alert('Diagnostics failed. See console.');
+    }
+  };
+
   // --- Auth Check ---
   useEffect(() => {
     getSession().then(session => {
@@ -712,12 +740,29 @@ function App() {
                     <Activity size={16} className="text-brand-500" /> LAN Sync
                  </div>
                  <p className="text-xs text-gray-400 mb-3">DHT Active. {activePeers} Mesh Peers connected.</p>
-                 <div className="flex gap-1 justify-center">
-                    <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-bounce"></span>
-                    <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
-                    <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></span>
+                 <div className="flex gap-1 justify-center mb-3">
+                 <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-bounce"></span>
+                 <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
+                 <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></span>
                  </div>
-              </div>
+
+                 {/* New Connect button + extra button below it */}
+                 <div className="flex flex-col gap-2">
+                  <button
+                    onClick={handleConnectClick}
+                    className="w-full bg-brand-500 text-black px-3 py-2 rounded-md font-semibold hover:bg-brand-400 transition"
+                    disabled={connecting}
+                  >
+                    {connecting ? 'Connecting...' : 'Connect'}
+                  </button>
+                  <button
+                    onClick={handleRunDiagnostics}
+                    className="w-full bg-white/5 text-white px-3 py-2 rounded-md border border-white/10 hover:bg-white/10 transition"
+                  >
+                    Run Diagnostics
+                  </button>
+                 </div>
+               </div>
            </div>
         </aside>
 
