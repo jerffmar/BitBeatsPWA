@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { 
@@ -588,6 +587,11 @@ function App() {
       </button>
   );
 
+  // --- safe display helpers (new) ---
+  const displayName = user?.username || 'User';
+  const displayHandle = user?.handle || ('@' + (user?.username || 'user'));
+  const initials = (displayName.substring(0, 2) || 'US').toUpperCase();
+
   if (!user) {
     return <AuthScreen onLogin={setUser} />;
   }
@@ -639,11 +643,11 @@ function App() {
            <div className="mb-6 px-4 py-2 bg-white/5 rounded-lg border border-white/5 flex items-center justify-between">
               <div className="flex items-center gap-2 overflow-hidden">
                 <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-black font-bold text-xs">
-                  {user.username.substring(0,2).toUpperCase()}
+                  {initials}
                 </div>
                 <div className="truncate">
-                  <div className="text-sm font-bold text-white truncate">{user.username}</div>
-                  <div className="text-[10px] text-gray-500 truncate">{user.handle}</div>
+                  <div className="text-sm font-bold text-white truncate">{displayName}</div>
+                  <div className="text-[10px] text-gray-500 truncate">{displayHandle}</div>
                 </div>
               </div>
               <button onClick={handleLogout} className="text-gray-500 hover:text-white" title="Logout">
@@ -913,7 +917,7 @@ function App() {
                                            type="text" 
                                            value={newPostContent}
                                            onChange={(e) => setNewPostContent(e.target.value)}
-                                           placeholder={`Say something to the swarm, ${user.username}...`}
+                                           placeholder={`Say something to the swarm, ${displayName}...`}
                                            className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-brand-500/50"
                                          />
                                      </div>
