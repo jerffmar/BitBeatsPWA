@@ -1,14 +1,3 @@
-/* 
-  NOTE: If you see `npm ci` failing with EUSAGE about package.json vs package-lock.json:
-    1) Run locally: npm install
-    2) Commit the updated package-lock.json: git add package-lock.json && git commit -m "chore: update lockfile"
-    3) Re-run: npm ci (CI will now succeed)
-  Alternatives:
-    - Delete node_modules and package-lock.json then run npm install to regenerate the lockfile.
-    - In CI only (not recommended): run npm install before build to refresh the lockfile.
-  Rationale: `npm ci` requires the lockfile to match package.json exactly; updating the lockfile resolves the EUSAGE errors.
-*/
-
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Play, Heart, Clock, Cloud, CheckCircle, Share2, MoreHorizontal, Loader, AlertTriangle } from 'lucide-react';
