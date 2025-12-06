@@ -33,17 +33,9 @@ const buildPeers = () => {
     peers.push(`${protocol.http}://localhost:8765/gun`, `${protocol.ws}://localhost:8765/gun`);
   }
 
-  // Remote relays (use secure schemes when on HTTPS)
-  const remoteHosts = [
-    'bitbeats-hcx1.onrender.com/gun',
-    'peer.wallie.io/gun',
-    'gundb-relay-mlccl.ondigitalocean.app/gun',
-    'plato.design/gun'
-  ];
-  remoteHosts.forEach(host => {
-    peers.push(forceSecure(`${protocol.http}://${host}`));
-    peers.push(forceSecure(`${protocol.ws}://${host}`));
-  });
+  // Remote relays were causing repeated failed WSS dials; rely on explicit VITE_GUN_PEERS instead
+  //   const remoteHosts = [ ... ];
+  //   remoteHosts.forEach(...) // removed
 
   return Array.from(new Set(peers.filter(Boolean)));
 };
