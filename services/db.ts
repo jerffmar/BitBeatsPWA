@@ -38,6 +38,23 @@ export const getGun = () => {
     return gun;
 };
 
+// --- NEW: Replicate to Relay Helper ---
+// Writes a deterministic archival copy under `bitbeats/relay_archive/...` so the relay persists it to disk.
+// This complements the normal distributed set/put which may use `.set()` or ephemeral keys.
+const replicateToRelay = (path: string[], payload: any) => {
+  try {
+    const db = getGun();
+    if (!db) return;
+    let node: any = db.get('bitbeats').get('relay_archive');
+    for (const p of path) node = node.get(p);
+    // include a small metadata envelope
+    node.put({ ...payload, _relayArchivedAt: Date.now() });
+    logGun('replicateToRelay', { path, id: payload.id || payload.mbid || null });
+  } catch (err) {
+    console.warn('replicateToRelay failed', err);
+  }
+};
+
 // --- TRACKS (INVENTORY) ---
 
 export const subscribeToTracks = (callback: (track: Track) => void) => {
@@ -86,6 +103,13 @@ export const publishTrackMetadata = async (track: Partial<Track>) => {
     
     // Also link to user profile (optional, for future "My Uploads" view)
     user.get('uploads').set(db.get('bitbeats').get('v1').get('tracks').get(trackId));
+
+    // Ensure an archival copy is written to the relay for persistence
+    try {
+      replicateToRelay(['tracks', trackId], { id: trackId, ...trackData });
+    } catch (e) {
+      console.warn('Failed to replicate track to relay', e);
+    }
 };
 
 // --- SOCIAL POSTS ---
@@ -112,15 +136,23 @@ export const publishPost = async (author: string, content: string, trackId?: str
     const db = getGun();
     if (!db) return;
     
+    // Use deterministic id so we can archive reliably
+    const postId = 'p_' + Math.random().toString(36).substr(2, 9);
+
     const post = {
+        id: postId,
         author,
         content,
         timestamp: Date.now(),
         trackId: trackId || null
     };
     
-    db.get('bitbeats').get('v1').get('social').set(post);
-    logGun('publishPost', { author, trackId });
+    // Put into live social feed (indexed by id)
+    db.get('bitbeats').get('v1').get('social').get(postId).put(post);
+    logGun('publishPost', { author, trackId, postId });
+
+    // Archive to relay
+    replicateToRelay(['social', postId], post);
 };
 
 // --- BOUNTIES ---
@@ -148,7 +180,10 @@ export const createBounty = async (mbid: string | undefined, query: string, rewa
     const db = getGun();
     if (!db) return;
 
+    const bountyId = 'b_' + Math.random().toString(36).substr(2, 9);
+
     const bounty = {
+        id: bountyId,
         mbid: mbid || null,
         query,
         reward,
@@ -157,8 +192,11 @@ export const createBounty = async (mbid: string | undefined, query: string, rewa
         timestamp: Date.now()
     };
 
-    db.get('bitbeats').get('v1').get('bounties').set(bounty);
-    logGun('createBounty', { mbid, query, reward });
+    db.get('bitbeats').get('v1').get('bounties').get(bountyId).put(bounty);
+    logGun('createBounty', { mbid, query, reward, bountyId });
+
+    // Archive to relay
+    replicateToRelay(['bounties', bountyId], bounty);
 };
 
 // --- LISTEN PARTIES ---
@@ -185,14 +223,20 @@ export const createParty = async (host: string, currentTrackId: string) => {
     const db = getGun();
     const partyId = 'lp_' + Math.random().toString(36).substr(2, 9);
     
-    db.get('bitbeats').get('v1').get('parties').get(partyId).put({
+    const party = {
+        id: partyId,
         host,
         currentTrackId,
         timestamp: Date.now(),
         participants: 1,
         status: 'PLAYING'
-    });
+    };
+
+    db.get('bitbeats').get('v1').get('parties').get(partyId).put(party);
     logGun('createParty', { partyId, host, currentTrackId });
+
+    // Archive to relay
+    replicateToRelay(['parties', partyId], party);
 };
 
 // --- USER CREDITS ---
@@ -213,8 +257,13 @@ export const updateUserCredits = (amount: number) => {
     const user = db.user();
     if (!user.is) return;
     
-    // Note: Insecure for real money. Client can manipulate. 
-    // Requires Consensus/Smart Contract for real security.
     user.get('credits').put(amount);
     logGun('updateUserCredits', { pub: user.is.pub, amount });
+
+    // Also archive user's credits snapshot for relay persistence
+    try {
+      replicateToRelay(['userCredits', user.is.pub], { pub: user.is.pub, credits: amount, timestamp: Date.now() });
+    } catch (e) {
+      console.warn('Failed to replicate credits to relay', e);
+    }
 };
