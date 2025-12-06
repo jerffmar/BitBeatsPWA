@@ -283,7 +283,6 @@ rm -f prisma.config.ts
 cat <<EOF > .env
 DATABASE_URL="postgresql://$DB_USER:$DB_PASS@localhost:5432/$DB_NAME?schema=public"
 PORT=$NODE_PORT
-NODE_ENV=production
 ACOUSTID_API_KEY="8XaBELgH"
 EOF
 
@@ -351,7 +350,7 @@ pm2 delete bitbeats-api 2>/dev/null || true
 
 # COMANDO CORRIGIDO DO PM2:
 # Usa --node-args para passar o import do TSX corretamente para o Node
-pm2 start src/server/index.ts --name bitbeats-api --node-args="--import tsx" --env production
+pm2 start src/server/index.ts --name bitbeats-api --interpreter="$(which node)" --node-args="--import tsx" --env production
 pm2 save
 
 log "Configurando Nginx..."
