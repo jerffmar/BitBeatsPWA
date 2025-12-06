@@ -16,7 +16,8 @@ DB_USER="bitbeats_user"
 DB_PASS="bitbeats_secure_password" # ALERTA: Mude isso em produção!
 DB_NAME="bitbeats_db"
 NODE_PORT=3001
-
+# Limpa instalação anterior (opcional)
+sudo rm -rf /var/www/bitbeats
 # Cores para logs
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
