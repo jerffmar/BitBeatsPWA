@@ -1,5 +1,5 @@
 #!/bin/bash
-
+clear
 # ==============================================================================
 # BitBeats - Script de Deploy "All-in-One" (Corrigido)
 # Ubuntu 24.04 LTS
