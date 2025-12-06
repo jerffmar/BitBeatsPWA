@@ -13,15 +13,16 @@ const logGun = (...args: any[]) => console.debug('[GUN]', ...args);
 // Build peers from environment and same-origin
 const buildPeers = () => {
   const peers: string[] = [];
+  const protocol = (typeof window !== 'undefined' && window.location?.protocol === 'https:') ? { http: 'https', ws: 'wss' } : { http: 'http', ws: 'ws' };
+
   if (typeof window !== 'undefined' && window.location) {
-    const origin = window.location.origin;
-    // Prefer HTTP(S) URL (Gun will negotiate WS)
+    const origin = window.location.origin.replace(/^https?/, protocol.http);
     peers.push(`${origin}/gun`);
-    // Explicit WS/WSS endpoint for environments that require it
-    peers.push(origin.replace(/^http/, 'ws') + '/gun');
+    peers.push(origin.replace(/^http/, protocol.ws) + '/gun');
   }
-  // Local development relay (client-side can reach a local node)
-  peers.push('http://localhost:8765/gun', 'ws://localhost:8765/gun');
+
+  // Local relay (match current protocol to avoid mixed content)
+  peers.push(`${protocol.http}://localhost:8765/gun`, `${protocol.ws}://localhost:8765/gun`);
 
   peers.push(
     'https://bitbeats-hcx1.onrender.com/gun',
@@ -29,7 +30,6 @@ const buildPeers = () => {
     'https://gundb-relay-mlccl.ondigitalocean.app/gun',
     'https://plato.design/gun'
   );
-  // Dedup and drop falsy
   return Array.from(new Set(peers.filter(Boolean)));
 };
 
