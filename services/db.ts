@@ -12,7 +12,7 @@ declare global {
 const LOCAL_RELAY = typeof window !== 'undefined' ? `${window.location.origin}/gun` : null;
 const DEFAULT_PEERS = [
   LOCAL_RELAY, // same-origin relay if hosted (e.g., your Render instance pointing to /gun)
-  'https://localhost/gun', // Server-side relay for reliability
+  'https://bitbeats-hcx1.onrender.com/gun', // Render relay
   'https://peer.wallie.io/gun',
   'https://gundb-relay-mlccl.ondigitalocean.app/gun',
   'https://plato.design/gun'
