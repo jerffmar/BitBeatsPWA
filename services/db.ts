@@ -21,14 +21,16 @@ const buildPeers = () => {
     peers.push(origin.replace(/^http/, protocol.ws) + '/gun');
   }
 
-  // Local relay (match current protocol to avoid mixed content)
-  peers.push(`${protocol.http}://localhost:8765/gun`, `${protocol.ws}://localhost:8765/gun`);
+  // Local relay only when not under HTTPS (to avoid mixed-content/cert errors)
+  if (protocol.http === 'http') {
+    peers.push(`${protocol.http}://localhost:8765/gun`, `${protocol.ws}://localhost:8765/gun`);
+  }
 
   peers.push(
-    'https://bitbeats-hcx1.onrender.com/gun',
-    'https://peer.wallie.io/gun',
-    'https://gundb-relay-mlccl.ondigitalocean.app/gun',
-    'https://plato.design/gun'
+    'http://bitbeats-hcx1.onrender.com/gun',
+    'http://peer.wallie.io/gun',
+    'http://gundb-relay-mlccl.ondigitalocean.app/gun',
+    'http://plato.design/gun'
   );
   return Array.from(new Set(peers.filter(Boolean)));
 };
