@@ -1065,7 +1065,7 @@ function App() {
             </div>
          </div>
 
-         <div className="flex items-center justify-end gap-3 w-1/3"></div>
+         <div className="flex items-center justify-end gap-3 w-1/3">
              <div className="hidden md:flex items-center gap-2 text-brand-500 bg-brand-500/10 px-3 py-1 rounded-full text-xs font-bold border border-brand-500/20">
                <div className="w-2 h-2 bg-brand-500 rounded-full animate-pulse"></div>
                {currentTrack && library[currentTrack.id]?.status === 'SEEDING' ? 'SEEDING' : 'NET OK'}
