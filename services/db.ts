@@ -10,6 +10,7 @@ declare global {
 
 // Public relay peers for the mesh network
 const DEFAULT_PEERS = [
+  'https://bitbeats-hcx1.onrender.com/gun', // Server-side relay for reliability
   'https://peer.wallie.io/gun',
   'https://gundb-relay-mlccl.ondigitalocean.app/gun',
   'https://plato.design/gun'

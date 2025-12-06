@@ -1,4 +1,3 @@
-
 # BitBeats
 
 **Decentralized, Duty-Free Audio Streaming**
@@ -80,3 +79,9 @@ npm run dev
 
 ## 📄 License
 MIT
+
+## 🔌 Gun Relay Reliability
+- Default peers now include `https://bitbeats-hcx1.onrender.com/gun`.
+- To point at your own relay, set `VITE_GUN_PEERS` (comma-separated):
+  - Example: `VITE_GUN_PEERS=https://your-domain.com/gun`
+- Quick self-host (dev): `npx gun --port 8765 --path gun`
