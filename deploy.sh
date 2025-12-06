@@ -331,4 +331,4 @@ sudo ufw allow 443/tcp
 sudo ufw allow ssh
 echo "y" | sudo ufw --force enable || true
 
-log "✅ Deployment finished. Access app on port ${NGINX_PORT} (e.g., http://<server>:${NGINX_PORT})"
+log "✅ Deployment finished. Access app on port ${NGINX_PORT} (e.g., http://<server>)"
