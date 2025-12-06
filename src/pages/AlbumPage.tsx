@@ -209,6 +209,27 @@ export const AlbumPage: React.FC<AlbumPageProps> = ({ onPlay, currentTrackId, is
     }
   };
 
+  // Install helper (uses global deferred prompt if App captured it)
+  const handleInstall = () => {
+    const promptEvent = (window as any).__bb_deferred;
+    if (promptEvent) {
+      promptEvent.prompt();
+      promptEvent.userChoice.then((choice: any) => {
+        if (choice.outcome === 'accepted') {
+          alert('Thanks! App installed.');
+        } else {
+          alert('Install dismissed.');
+        }
+        (window as any).__bb_deferred = undefined;
+      }).catch(() => {
+        alert('Install prompt failed. Try using browser menu > Add to Home screen.');
+      });
+    } else {
+      // Fallback message/instructions
+      alert('To install BitBeats: open your browser menu and choose "Add to Home screen" (Android Chrome) or use the Share / Add to Home Screen option.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -295,6 +316,13 @@ export const AlbumPage: React.FC<AlbumPageProps> = ({ onPlay, currentTrackId, is
             </a>
             <button className="flex items-center justify-center gap-2 text-sm bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-lg border border-white/10">
               <Share2 size={14} /> Share Album
+            </button>
+            {/* Install App button (mobile CTA) */}
+            <button
+              onClick={handleInstall}
+              className="flex items-center justify-center gap-2 text-sm bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-lg border border-white/10"
+            >
+              Install App
             </button>
           </div>
         </div>

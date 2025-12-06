@@ -229,23 +229,31 @@ function App() {
   useEffect(() => {
     const handler = (e: Event) => {
       e.preventDefault();
+      // keep local state
       setDeferredPrompt(e);
+      // also expose globally so other pages can prompt install
+      (window as any).__bb_deferred = e;
     };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   const handleInstallClick = () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then((choiceResult: any) => {
+    const promptEvent = deferredPrompt || (window as any).__bb_deferred;
+    if (promptEvent) {
+      promptEvent.prompt();
+      promptEvent.userChoice.then((choiceResult: any) => {
         if (choiceResult.outcome === 'accepted') {
           console.log('User accepted the install prompt');
         } else {
           console.log('User dismissed the install prompt');
         }
         setDeferredPrompt(null);
+        (window as any).__bb_deferred = undefined;
       });
+    } else {
+      // fallback: instruct user how to install manually
+      alert('To install: open the browser menu and choose "Add to Home screen" (Android Chrome) or use the Share menu.');
     }
   };
 
@@ -1110,7 +1118,7 @@ function App() {
             </div>
          </div>
 
-         <div className="flex items-center justify-end gap-3 w-1/3">
+         <div className="flex items-center justify-end gap-3 w-1/3"></div>
              <div className="hidden md:flex items-center gap-2 text-brand-500 bg-brand-500/10 px-3 py-1 rounded-full text-xs font-bold border border-brand-500/20">
                <div className="w-2 h-2 bg-brand-500 rounded-full animate-pulse"></div>
                {currentTrack && library[currentTrack.id]?.status === 'SEEDING' ? 'SEEDING' : 'NET OK'}
@@ -1142,7 +1150,7 @@ function App() {
              </div>
 
              {/* Reuse same nav items as desktop */}
-             <nav className="space-y-1">
+             <nav className="space-y-1"></nav>
                <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Browse</div>
                <NavItem path="/" icon={Radio} label="Discovery" />
                <NavItem path="/bounties" icon={Zap} label="Bounty Board" />
