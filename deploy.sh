@@ -356,7 +356,7 @@ pm2 save
 log "Configurando Nginx..."
 sudo tee /etc/nginx/sites-available/bitbeats > /dev/null <<EOL
 server {
-    listen 80;
+    listen 10000;
     server_name $DOMAIN;
 
     root $APP_DIR/dist;
@@ -389,7 +389,7 @@ sudo systemctl reload nginx
 
 # Firewall
 log "Configurando Firewall..."
-sudo ufw allow 'Nginx Full'
+sudo ufw allow 10000/tcp
 sudo ufw allow ssh
 echo "y" | sudo ufw --force enable
 

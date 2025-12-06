@@ -9,12 +9,18 @@ declare global {
 }
 
 // Public relay peers for the mesh network
-// Updated list to remove dead Heroku peer and add reliable ones
-const PEERS = [
+const DEFAULT_PEERS = [
   'https://peer.wallie.io/gun',
   'https://gundb-relay-mlccl.ondigitalocean.app/gun',
   'https://plato.design/gun'
 ];
+
+const envPeers =
+  (import.meta as any).env?.VITE_GUN_PEERS?.split(',')
+    .map((p: string) => p.trim())
+    .filter(Boolean) || [];
+
+const PEERS = envPeers.length ? envPeers : DEFAULT_PEERS;
 
 let gun: any;
 
