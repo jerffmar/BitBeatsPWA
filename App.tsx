@@ -1051,7 +1051,7 @@ function App() {
                    <div className="flex items-center gap-2">
                        <p className="text-xs text-gray-400">{currentTrack.artist}</p>
                        <span className="text-[9px] bg-white/10 px-1 rounded text-gray-400 border border-white/10">
-                           {currentTrack.audioUrl.startsWith('magnet') ? 'P2P' : 'HTTP'}
+                           {currentTrack.audioUrl?.startsWith?.('magnet') ? 'P2P' : 'HTTP'}
                        </span>
                    </div>
                 </div>
@@ -1077,7 +1077,7 @@ function App() {
 
          <div className="flex flex-col items-center w-1/3">
             <div className="flex items-center gap-6 mb-2">
-               <button className="text-gray-400 hover:text-white transition-colors"><SkipBack size={20} /></button>
+               <button className="text-gray-400 hover:text-white transition-colors" aria-label="previous"><SkipBack size={20} /></button>
                <button 
                  onClick={() => currentTrack && handlePlay(currentTrack)}
                  className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-black hover:scale-110 active:scale-95 transition-all shadow-lg shadow-white/10"
@@ -1085,7 +1085,7 @@ function App() {
                >
                   {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
                </button>
-               <button className="text-gray-400 hover:text-white transition-colors"><SkipForward size={20} /></button>
+               <button className="text-gray-400 hover:text-white transition-colors" aria-label="next"><SkipForward size={20} /></button>
             </div>
             <div className="w-full max-w-md flex items-center gap-3 text-xs text-gray-400 font-mono">
                <span>{Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2,'0')}</span>
@@ -1118,7 +1118,7 @@ function App() {
             </div>
          </div>
 
-         <div className="flex items-center justify-end gap-3 w-1/3"></div>
+         <div className="flex items-center justify-end gap-3 w-1/3">
              <div className="hidden md:flex items-center gap-2 text-brand-500 bg-brand-500/10 px-3 py-1 rounded-full text-xs font-bold border border-brand-500/20">
                <div className="w-2 h-2 bg-brand-500 rounded-full animate-pulse"></div>
                {currentTrack && library[currentTrack.id]?.status === 'SEEDING' ? 'SEEDING' : 'NET OK'}
@@ -1144,13 +1144,13 @@ function App() {
                    <div className="text-xs text-gray-400">{displayHandle}</div>
                  </div>
                </div>
-               <button onClick={() => setSidebarOpen(false)} className="text-gray-400 p-2 rounded hover:bg-white/5">
+               <button onClick={() => setSidebarOpen(false)} className="text-gray-400 p-2 rounded hover:bg-white/5" aria-label="close menu">
                  <X size={18} />
                </button>
              </div>
 
              {/* Reuse same nav items as desktop */}
-             <nav className="space-y-1"></nav>
+             <nav className="space-y-1">
                <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Browse</div>
                <NavItem path="/" icon={Radio} label="Discovery" />
                <NavItem path="/bounties" icon={Zap} label="Bounty Board" />
