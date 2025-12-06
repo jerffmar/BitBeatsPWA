@@ -490,7 +490,7 @@ function App() {
 
       let offset = 0;
       if (searchFilter === 'SONG') offset = searchResults.catalog.songs.length;
-      if (searchFilter === 'ALBUM') offset = searchResults.catalog.albums.length;
+      if (searchFilter === 'ALBUM'') offset = searchResults.catalog.albums.length;
       if (searchFilter === 'ARTIST') offset = searchResults.catalog.artists.length;
 
       const moreResults = await searchGlobalCatalog(searchQuery, offset, searchFilter);
@@ -635,9 +635,9 @@ function App() {
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-dark-bg px-4">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-md space-y-3">
           {deferredPrompt && (
-            <div className="mb-4 flex justify-center">
+            <div className="flex justify-center">
               <button
                 onClick={handleInstallClick}
                 className="w-full bg-brand-500 text-black px-4 py-2 rounded-lg font-bold shadow-md hover:bg-brand-400 transition"
@@ -646,6 +646,15 @@ function App() {
               </button>
             </div>
           )}
+          {/* Always show install CTA as fallback/manual instruction */}
+          <div className="flex justify-center">
+            <button
+              onClick={handleInstallClick}
+              className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-lg font-bold transition"
+            >
+              Install App (Phone)
+            </button>
+          </div>
           <AuthScreen onLogin={setUser} />
         </div>
       </div>
